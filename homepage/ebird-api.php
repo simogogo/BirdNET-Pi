@@ -5,7 +5,7 @@
  */
 
 // Configurazione
-define('DB_PATH', '/home/pi/BirdNET-Pi/scripts/birds.db'); // Percorso al database SQLite di BirdNET-Pi
+define('DB_PATH', '../scripts/birds.db'); // Percorso al database SQLite di BirdNET-Pi
 define('MIN_CONFIDENCE', 0.8); // Confidenza minima predefinita
 
 // Headers per JSON response
