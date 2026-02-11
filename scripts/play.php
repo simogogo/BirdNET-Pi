@@ -163,11 +163,14 @@ if (get_included_files()[0] === __FILE__) {
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-  </head>';
+	<link rel="stylesheet" href="static/ebird-wizard.css">
+  </head>
+  ';
 }
 
 ?>
 <script src="static/custom-audio-player.js"></script>
+	
 <script>
 
 function deleteDetection(filename,copylink=false) {
@@ -378,6 +381,9 @@ function changeDetection(filename,copylink=false) {
 #If no specific species
 if(!isset($_GET['species']) && !isset($_GET['filename'])){
 ?>
+
+<script src="static/ebird-wizard.js"></script>
+
 <div class="play">
 <?php if($view == "byspecies" || $view == "date") { ?>
 <div style="width: auto;
