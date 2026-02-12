@@ -481,7 +481,7 @@ class eBirdExportWizard {
                             <label for="protocol-type">Protocollo *</label>
                             <select id="protocol-type" class="form-control">
                                 <option value="Stationary">Stationary - Punto fisso</option>
-								<option value="NFC">Nocturnal Flight Call (NFC)</option>
+								<option value="P54">Nocturnal Flight Call (NFC)</option>
                                 <option value="Incidental">Incidental - Casuale</option>
                             </select>
                             <small>Per BirdNET-Pi fisso, usa "Stationary"</small>
