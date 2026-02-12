@@ -266,7 +266,7 @@ class eBirdExportWizard {
             this.autoRemoveLowConfidence(e.target.checked);
         });
 		
-		this.handleDuplicateRemoval();
+		this.handleDuplicateRemoval();							
         this.updateReviewSummary();
     }
 
@@ -276,6 +276,14 @@ class eBirdExportWizard {
     renderHourlyReview(hour) {
         const detections = this.detectionsByHour[hour];
         const hourLabel = this.formatHour(hour);
+        
+        // Inizializza il protocollo per questa ora se non presente
+        if (!this.hourlyProtocols) {
+            this.hourlyProtocols = {};
+        }
+        if (!this.hourlyProtocols[hour]) {
+            this.hourlyProtocols[hour] = 'Stationary';
+        }
 
         return `
             <div class="hour-section" data-hour="${hour}">
@@ -296,6 +304,18 @@ class eBirdExportWizard {
                 </div>
                 
                 <div class="hour-content">
+                    <div class="hour-protocol-selector">
+                        <label for="protocol-${hour}">Protocollo per questa checklist:</label>
+                        <select id="protocol-${hour}" 
+                                class="protocol-select"
+                                data-hour="${hour}"
+                                onchange="window.ebirdWizard.updateHourlyProtocol('${hour}', this.value)">
+                            <option value="Stationary" ${this.hourlyProtocols[hour] === 'Stationary' ? 'selected' : ''}>Stationary - Punto fisso</option>
+                            <option value="P54" ${this.hourlyProtocols[hour] === 'P54' ? 'selected' : ''}>Nocturnal Flight Call (NFC)</option>
+                            <option value="Incidental" ${this.hourlyProtocols[hour] === 'Incidental' ? 'selected' : ''}>Incidental - Casuale</option>
+                        </select>
+                    </div>
+                    
                     <div class="species-list">
                         ${detections.map((detection, idx) => this.renderSpeciesCard(detection, hour, idx)).join('')}
                     </div>
@@ -365,7 +385,7 @@ class eBirdExportWizard {
                     <div class="detail-row">
                         <span class="detail-label">File audio:</span>
                         <span class="detail-value">
-                            <button class="btn-play-audio" onclick="window.ebirdWizard.playAudio('/By_Date/${detection.scientific_name.replace(" ", "_")}/${detection.filename}')">
+                            <button class="btn-play-audio" onclick="window.ebirdWizard.playAudio('${detection.filename}')">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                                     <polygon points="5 3 19 12 5 21 5 3"></polygon>
                                 </svg>
@@ -476,16 +496,6 @@ class eBirdExportWizard {
 
                     <div class="form-section">
                         <h4>Dettagli Osservazione</h4>
-
-                        <div class="form-group">
-                            <label for="protocol-type">Protocollo *</label>
-                            <select id="protocol-type" class="form-control">
-                                <option value="Stationary">Stationary - Punto fisso</option>
-								<option value="P54">Nocturnal Flight Call (NFC)</option>
-                                <option value="Incidental">Incidental - Casuale</option>
-                            </select>
-                            <small>Per BirdNET-Pi fisso, usa "Stationary"</small>
-                        </div>
 
                         <div class="form-group">
                             <label for="observers-count">Numero Osservatori</label>
@@ -624,13 +634,16 @@ class eBirdExportWizard {
                             <span class="detail-value">${this.exportData.location.countryCode || 'Non specificato'}</span>
                         </div>
                         <div class="location-detail">
-                            <span class="detail-label">Protocollo:</span>
-                            <span class="detail-value">${this.exportData.protocol || 'Stationary'}</span>
-                        </div>
-                        <div class="location-detail">
                             <span class="detail-label">Osservatori:</span>
                             <span class="detail-value">${this.exportData.observers || 1}</span>
                         </div>
+                    </div>
+                </div>
+
+                <div class="protocols-summary">
+                    <h4>📋 Protocolli per Checklist Oraria</h4>
+                    <div class="protocols-grid">
+                        ${this.renderProtocolsSummary()}
                     </div>
                 </div>
 
@@ -715,6 +728,33 @@ class eBirdExportWizard {
     }
 
     /**
+     * Renderizza il riepilogo dei protocolli per ora
+     */
+    renderProtocolsSummary() {
+        if (!this.hourlyProtocols || Object.keys(this.hourlyProtocols).length === 0) {
+            return '<p class="no-protocols">Nessun protocollo configurato</p>';
+        }
+
+        return Object.keys(this.hourlyProtocols).sort().map(hour => {
+            const protocol = this.hourlyProtocols[hour];
+            const protocolLabel = protocol === 'Stationary' ? 'Punto fisso' :
+                                 protocol === 'Traveling' ? 'In movimento' :
+                                 protocol === 'Incidental' ? 'Casuale' : protocol;
+            
+            const protocolIcon = protocol === 'Stationary' ? '📍' :
+                                protocol === 'Traveling' ? '🚶' :
+                                protocol === 'Incidental' ? '👁️' : '📋';
+
+            return `
+                <div class="protocol-item">
+                    <div class="protocol-hour">${protocolIcon} ${hour}:00-${hour}:59</div>
+                    <div class="protocol-type">${protocolLabel}</div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    /**
      * Utility functions
      */
     async fetchDetectionsByDate(date) {
@@ -784,6 +824,14 @@ class eBirdExportWizard {
                 if (input) input.value = 'X';
             }
         }
+    }
+
+    updateHourlyProtocol(hour, protocol) {
+        if (!this.hourlyProtocols) {
+            this.hourlyProtocols = {};
+        }
+        this.hourlyProtocols[hour] = protocol;
+        console.log(`Protocollo per checklist ${hour}:00 impostato a: ${protocol}`);
     }
 
     autoRemoveLowConfidence(remove) {
@@ -893,7 +941,7 @@ class eBirdExportWizard {
                     // Se la nuova detection ha count, usalo, altrimenti prova a preservare quello vecchio
                     count: species.count || (speciesByHour[hour][key] ? speciesByHour[hour][key].count : 'X'),
                     // Preserva anche il filename per il riferimento audio
-                    filename: species.filename || (speciesByHour[hour][key] ? speciesByHour[hour][key].filename : '')																								 
+                    filename: species.filename || (speciesByHour[hour][key] ? speciesByHour[hour][key].filename : '')
                 };
             }
         });
@@ -905,6 +953,11 @@ class eBirdExportWizard {
             const startTime = `${hour}:00`; // Inizio ora: HH:00
             const duration = '60'; // Durata: 60 minuti
             
+            // Protocollo specifico per questa checklist oraria
+            const protocol = this.hourlyProtocols && this.hourlyProtocols[hour] 
+                ? this.hourlyProtocols[hour] 
+                : 'Stationary';
+            
             // Commento generale per questa checklist oraria
             const hourlyComment = `${this.exportData.comments || 'Auto-generated from BirdNET-Pi recordings'} - Hourly checklist ${hour}:00-${hour}:59`;
             
@@ -913,12 +966,13 @@ class eBirdExportWizard {
                 // Il campo Genus rimane vuoto
                 const genus = '';
                 const scientificName = species.scientific_name;
+                
                 const myDay = this.selectedDate.substring(8, 10); // Estrae l'ora (HH)
 				const myMonth = this.selectedDate.substring(5, 7); // Estrae l'ora (HH)
 				const myYear = this.selectedDate.substring(0, 4); // Estrae l'ora (HH)
 				
-				const myDate = `${myMonth}/${myDay}/${myYear}`;
-                // Commento specie: solo la confidenza, senza ora
+				const myDate = `${myMonth}/${myDay}/${myYear}`;																		   
+                // Commento specie: confidenza + opzionalmente file audio
                 let speciesComment = `Confidence: ${(species.confidence * 100).toFixed(1)}%`;
                 if (this.exportData.includeAudioLinks && species.filename) {
                     speciesComment += ` | Audio: ${species.filename}`;
@@ -926,12 +980,12 @@ class eBirdExportWizard {
                 
                 // Usa il count dalla detection, default 'X' se non presente
                 const count = species.count || 'X';
+                
 				
   				const myStateProvince = '';
 				if(this.exportData.location.countryCode.toUpperCase() == 'US'){
 					myStateProvince = this.escapeCSV(this.exportData.location.stateProvince || '');
 				}
-				
                 const row = [
                     this.escapeCSV(species.common_name),
                     this.escapeCSV(genus),
@@ -945,7 +999,7 @@ class eBirdExportWizard {
                     startTime,
                     myStateProvince,
                     this.escapeCSV(this.exportData.location.countryCode || ''),
-                    this.exportData.protocol,
+                    protocol,
                     this.exportData.observers,
                     duration,
                     'N',
@@ -1007,14 +1061,13 @@ class eBirdExportWizard {
                 });
             });
         this.updateReviewSummary();
-    }
-	
+    }										  
     playAudio(filename) {
         // Implementazione riproduzione audio
         console.log('Riproduzione:', filename);
+        // Qui andrebbe implementata la logica per riprodurre il file audio
 		var audio = new Audio(filename);
 		audio.play();
-        // Qui andrebbe implementata la logica per riprodurre il file audio
     }
 
     formatDate(dateString) {
@@ -1076,7 +1129,7 @@ class eBirdExportWizard {
     }
 
     /**
-     * Salva i dati di configurazione dallo Step 3
+     * Salva i dati di configurazione dallo Step 2
      */
     saveConfigurationData() {
         const locality = document.getElementById('location-name')?.value;
@@ -1084,7 +1137,6 @@ class eBirdExportWizard {
         const longitude = document.getElementById('longitude')?.value;
         const stateProvince = document.getElementById('state-province')?.value;
         const countryCode = document.getElementById('country-code')?.value;
-        const protocol = document.getElementById('protocol-type')?.value;
         const observers = document.getElementById('observers-count')?.value;
         const comments = document.getElementById('comments')?.value;
         const includeAudioLinks = document.getElementById('include-audio-links')?.checked;
@@ -1094,7 +1146,6 @@ class eBirdExportWizard {
         if (longitude) this.exportData.location.longitude = longitude;
         if (stateProvince) this.exportData.location.stateProvince = stateProvince;
         if (countryCode) this.exportData.location.countryCode = countryCode;
-        if (protocol) this.exportData.protocol = protocol;
         if (observers) this.exportData.observers = parseInt(observers);
         if (comments !== undefined) this.exportData.comments = comments;
         this.exportData.includeAudioLinks = includeAudioLinks !== undefined ? includeAudioLinks : true;
