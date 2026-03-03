@@ -41,6 +41,9 @@ http:// ${BIRDNETPI_URL} {
   reverse_proxy /log* localhost:8080
   reverse_proxy /stats* localhost:8501
   reverse_proxy /terminal* localhost:8888
+
+  @api-rewrite path_regexp api ^/api/v2(.*)
+  rewrite @api-rewrite scripts/api_v2.php/{re.api.1}
 }
 EOF
 else
@@ -59,6 +62,9 @@ http:// ${BIRDNETPI_URL} {
   reverse_proxy /log* localhost:8080
   reverse_proxy /stats* localhost:8501
   reverse_proxy /terminal* localhost:8888
+
+  @api-rewrite path_regexp api ^/api/v2(.*)
+  rewrite @api-rewrite scripts/api_v2.php/{re.api.1}
 }
 EOF
 fi

@@ -1,63 +1,53 @@
-<?php
-
-$requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-
-if (strpos($requestUri, '/api/v1/') === 0) {
-  include_once 'scripts/api.php';
-  die();
-}
-
-/* Prevent XSS input */
-$_GET   = filter_input_array(INPUT_GET, FILTER_SANITIZE_STRING);
-$_POST  = filter_input_array(INPUT_POST, FILTER_SANITIZE_STRING);
-require_once 'scripts/common.php';
-$config = get_config();
-$site_name = get_sitename();
-$color_scheme = get_color_scheme();
-set_timezone();
-
-?>
 <!DOCTYPE html>
-<html lang="en">
-<title><?php echo $site_name; ?></title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<link id="iconLink" rel="shortcut icon" sizes=85x85 href="images/bird.png" />
-<link rel="stylesheet" href="<?php echo $color_scheme . '?v=' . date('n.d.y', filemtime($color_scheme)); ?>">
-<link rel="stylesheet" type="text/css" href="static/dialog-polyfill.css" />
+<html>
+<head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="/">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="description" content="BirdNET-Pi - Real-time bird detection and identification powered by AI. Monitor bird species directly from your Raspberry Pi.">
+
+  <!-- PWA / Android -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#1b2838">
+  <meta name="application-name" content="BirdNET-Pi">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="BirdNET-Pi">
+  <link rel="apple-touch-icon" sizes="192x192" href="icons/Icon-192.png">
+  <link rel="apple-touch-icon" sizes="512x512" href="icons/Icon-512.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>BirdNET-Pi</title>
+  <link rel="manifest" href="manifest.json">
+</head>
 <body>
-<div class="banner">
-  <div class="logo">
-<?php if(isset($_GET['logo'])) {
-echo "<a href=\"https://github.com/Nachtzuster/BirdNET-Pi.git\" target=\"_blank\"><img style=\"width:60;height:60;\" src=\"images/bird.png\"></a>";
-} else {
-echo "<a href=\"https://github.com/Nachtzuster/BirdNET-Pi.git\" target=\"_blank\"><img src=\"images/bird.png\"></a>";
-}?>
-  </div>
+  <!--
+    You can customize the "flutter_bootstrap.js" script.
+    This is useful to provide a custom configuration to the Flutter loader
+    or to give the user feedback during the initialization process.
 
-
-  <div class="stream">
-<?php
-if(isset($_GET['stream'])){
-  ensure_authenticated('You cannot listen to the live audio stream');
-      echo "
-  <audio controls autoplay><source src=\"/stream\"></audio>
-  </div>
-  <h1><a href=\"/\"><img class=\"topimage\" src=\"images/bnp.png\"></a></h1>
-  </div><div class=\"centered\"><h3>$site_name</h3></div>";
-} else {
-    echo "
-  <form action=\"index.php\" method=\"GET\">
-    <button type=\"submit\" name=\"stream\" value=\"play\">Live Audio</button>
-  </form>
-  </div>
-  <h1><a href=\"/\"><img class=\"topimage\" src=\"images/bnp.png\"></a></h1>
-</div><div class=\"centered\"><h3>$site_name</h3></div>";
-}
-if(isset($_GET['filename'])) {
-  $filename = $_GET['filename'];
-echo "
-<iframe src=\"views.php?view=Recordings&filename=$filename\"></iframe>";
-} else {
-  echo "
-<iframe src=\"views.php\"></iframe>";
-}
+    For more details:
+    * https://docs.flutter.dev/platform-integration/web/initialization
+  -->
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

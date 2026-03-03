@@ -78,7 +78,8 @@ create_necessary_dirs() {
   sudo -u ${USER} ln -fs $my_dir/scripts/todays_detections.php ${EXTRACTED}
   sudo -u ${USER} ln -fs $my_dir/scripts/history.php ${EXTRACTED}
   sudo -u ${USER} ln -fs $my_dir/scripts/weekly_report.php ${EXTRACTED}
-  sudo -u ${USER} ln -fs $my_dir/homepage/images/favicon.ico ${EXTRACTED}
+  sudo -u ${USER} ln -fs $my_dir/scripts/api_v2.php ${EXTRACTED}
+  #sudo -u ${USER} ln -fs $my_dir/homepage/images/favicon.ico ${EXTRACTED}
   sudo -u ${USER} ln -fs ${HOME}/phpsysinfo ${EXTRACTED}
   sudo -u ${USER} ln -fs $my_dir/templates/phpsysinfo.ini ${HOME}/phpsysinfo/
   sudo -u ${USER} ln -fs $my_dir/templates/green_bootstrap.css ${HOME}/phpsysinfo/templates/
