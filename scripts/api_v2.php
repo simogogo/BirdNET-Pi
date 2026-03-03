@@ -159,15 +159,16 @@ function handle_auth($method, $action)
         $username = trim($body['username'] ?? '');
         $password = trim($body['password'] ?? '');
 
-        if (empty($username) || empty($password)) {
-            json_error('Username e password richiesti', 400);
+        if (empty($username)) {
+            json_error('Username richiesto', 400);
         }
 
         $config = get_config();
         $validUser = 'birdnet';
         $validPass = $config['CADDY_PWD'] ?? '';
 
-        if ($username === $validUser && $password === $validPass && !empty($validPass)) {
+        // Se CADDY_PWD non è impostata (prima installazione), basta lo username corretto
+        if ($username === $validUser && ($validPass === '' || $password === $validPass)) {
             json_success(['authenticated' => true]);
         }
         else {
