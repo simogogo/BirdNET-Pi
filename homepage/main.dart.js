@@ -59712,7 +59712,8 @@ return A.j(A.pv(),$async$$2)
 case 6:o=d
 n=A.cf(J.as(o.a,"auth_username"))
 m=A.cf(J.as(o.a,"auth_password"))
-if(n!=null&&n.length!==0&&m!=null&&m.length!==0){k=B.cQ.dg(n+":"+m)
+if(m==null)m=""
+if(n!=null&&n.length!==0){k=B.cQ.dg(n+":"+m)
 l=B.l_.gu5().dg(k)
 k=a.b
 k===$&&A.a()
