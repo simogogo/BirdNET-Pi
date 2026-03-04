@@ -1039,12 +1039,20 @@ function handle_services($method, $serviceName)
         }
 
         $output = shell_exec("sudo systemctl $action $svcName 2>&1");
+
+        // Se il servizio e' livestream, replica l'azione su icecast2 (come da richiesta)
+        if ($serviceName === 'livestream') {
+            shell_exec("sudo systemctl $action icecast2.service 2>&1");
+        }
+
         $newStatus = trim(shell_exec("systemctl is-active $svcName 2>/dev/null") ?? 'unknown');
+        $newEnabled = trim(shell_exec("systemctl is-enabled $svcName 2>/dev/null") ?? 'unknown');
 
         json_success([
             'service' => $serviceName,
             'action' => $action,
             'new_status' => $newStatus,
+            'new_enabled' => $newEnabled === 'enabled',
             'output' => trim($output ?? ''),
         ]);
     }
