@@ -782,16 +782,25 @@ function handle_serve_media($filepath)
     if (!$filepath)
         json_error('Percorso file richiesto', 400);
 
+    $filepath = urldecode($filepath);
+
     // Security check to avoid path traversal
     if (strpos($filepath, '..') !== false) {
         json_error('Percorso file non valido', 400);
     }
 
-    $home = get_home();
-    if (empty($home))
-        $home = __ROOT__;
+    $config = get_config();
+    if (isset($config['EXTRACTED']) && !empty($config['EXTRACTED'])) {
+        $extractedDir = rtrim($config['EXTRACTED'], '/');
+    }
+    else {
+        $home = get_home();
+        if (empty($home))
+            $home = __ROOT__;
+        $extractedDir = "$home/BirdSongs/Extracted";
+    }
 
-    $mediaPath = "$home/BirdSongs/Extracted/By_Date/$filepath";
+    $mediaPath = "$extractedDir/By_Date/$filepath";
 
     if (!file_exists($mediaPath)) {
         http_response_code(404);
@@ -804,6 +813,10 @@ function handle_serve_media($filepath)
         $ext = strtolower(pathinfo($mediaPath, PATHINFO_EXTENSION));
         if ($ext === 'wav')
             $mime = 'audio/wav';
+        elseif ($ext === 'flac')
+            $mime = 'audio/flac';
+        elseif ($ext === 'mp3')
+            $mime = 'audio/mpeg';
         elseif ($ext === 'png')
             $mime = 'image/png';
         else
