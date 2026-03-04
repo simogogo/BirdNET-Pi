@@ -119,6 +119,9 @@ try {
         case 'recordinglength':
             handle_recording_length($method);
             break;
+        case 'database-lang':
+            handle_database_lang();
+            break;
         case 'services':
             handle_services($method, $id);
             break;
@@ -830,6 +833,13 @@ function handle_recording_length($method)
         json_success(['RECORDING_LENGTH' => $config['RECORDING_LENGTH'] ?? '15']);
     }
     json_error('Metodo non supportato', 405);
+}
+
+// ─── DATABASE LANG (No Auth) ─────────────────────
+function handle_database_lang()
+{
+    $config = get_config();
+    json_success(['DATABASE_LANG' => $config['DATABASE_LANG'] ?? 'en']);
 }
 
 // ─── CONFIG ──────────────────────────────────────
