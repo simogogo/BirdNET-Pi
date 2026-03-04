@@ -1063,7 +1063,10 @@ function handle_services($method, $serviceName)
 // ─── SYSTEM ──────────────────────────────────────
 function handle_system($method, $action)
 {
-    if ($method !== 'POST')
+    // GET is allowed only for 'info' (read-only); all other actions require POST
+    if ($action === 'info' && $method !== 'GET' && $method !== 'POST')
+        json_error('Usa GET o POST', 405);
+    if ($action !== 'info' && $method !== 'POST')
         json_error('Usa POST', 405);
     require_auth();
 
@@ -1099,14 +1102,23 @@ function handle_system($method, $action)
             $memUsage = trim(shell_exec("free -h | grep Mem | awk '{print $3\"/\"$2}'") ?? '');
             $cpuTemp = trim(shell_exec("vcgencmd measure_temp 2>/dev/null | cut -d= -f2") ?? '');
 
-            json_success([
+            // Count commits behind the remote (uses cached fetch; non-blocking)
+            $commitsBehind = (int)trim(
+                shell_exec("cd $home/BirdNET-Pi && git rev-list HEAD..origin/$gitBranch --count 2>/dev/null") ?? '0'
+            );
+
+            $infoResponse = [
                 'git_hash' => $gitHash,
                 'git_branch' => $gitBranch,
                 'uptime' => $uptime,
                 'disk_usage' => $diskUsage,
                 'memory_usage' => $memUsage,
                 'cpu_temperature' => $cpuTemp,
-            ]);
+            ];
+            if ($commitsBehind !== 0) {
+                $infoResponse['commits_behind'] = $commitsBehind;
+            }
+            json_success($infoResponse);
             break;
 
         case 'backup':
