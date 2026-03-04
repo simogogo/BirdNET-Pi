@@ -5,7 +5,7 @@ error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
  * BirdNET-Pi REST API v2
  * 
  * API completa per l'app Flutter BirdNET-Pi.
- * Fornisce endpoints JSON per tutte le funzionalità del frontend PHP.
+ * Fornisce endpoints JSON per tutte le funzionalità  del frontend PHP.
  * 
  * Routing: /api/v2/{resource}[/{id}][/{action}]
  */
@@ -15,9 +15,7 @@ if (!defined('__ROOT__')) {
 }
 require_once(__ROOT__ . '/scripts/common.php');
 
-// ═══════════════════════════════════════
 //  CORS & Headers
-// ═══════════════════════════════════════
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
@@ -28,9 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// ═══════════════════════════════════════
 //  JSON helpers
-// ═══════════════════════════════════════
 function json_success($data, $code = 200)
 {
     http_response_code($code);
@@ -69,9 +65,7 @@ function get_db_rw()
     return $db;
 }
 
-// ═══════════════════════════════════════
 //  Router
-// ═══════════════════════════════════════
 $config = get_config();
 set_timezone();
 
@@ -154,7 +148,7 @@ catch (Exception $e) {
     json_error('Errore interno: ' . $e->getMessage(), 500);
 }
 
-// ─── AUTH ─────────────────────────────────────────
+//  AUTH
 function handle_auth($method, $action)
 {
     if ($action === 'login' && $method === 'POST') {
@@ -182,11 +176,9 @@ function handle_auth($method, $action)
     json_error('Endpoint auth non valido', 404);
 }
 
-// ═══════════════════════════════════════════════════════════════
 //  ENDPOINT HANDLERS
-// ═══════════════════════════════════════════════════════════════
 
-// ─── OVERVIEW ────────────────────────────────────
+//  OVERVIEW
 function handle_overview()
 {
     $summary = get_summary();
@@ -223,7 +215,7 @@ function handle_overview()
     ]);
 }
 
-// ─── DETECTIONS ──────────────────────────────────
+//  DETECTIONS
 function handle_detections($method, $id)
 {
     if ($method !== 'GET')
@@ -289,7 +281,7 @@ function handle_detections($method, $id)
     ]);
 }
 
-// ─── SPECIES ─────────────────────────────────────
+//  SPECIES
 function handle_species($method, $id, $action)
 {
     if ($method !== 'GET')
@@ -389,7 +381,7 @@ function handle_species($method, $id, $action)
     ]);
 }
 
-// ─── RECORDINGS ──────────────────────────────────
+//  RECORDINGS
 function handle_recordings($method, $id, $action)
 {
     $db = get_db();
@@ -541,7 +533,7 @@ function handle_recordings($method, $id, $action)
     }
 }
 
-// ─── CHARTS ──────────────────────────────────────
+//  CHARTS
 function handle_charts($type)
 {
     $date = $_GET['date'] ?? date('Y-m-d');
@@ -660,7 +652,7 @@ function handle_charts($type)
     json_error('Tipo grafico non valido. Usa: daily, dates', 400);
 }
 
-// ─── WEEKLY REPORT ───────────────────────────────
+//  WEEKLY REPORT
 function handle_report($type)
 {
     if ($type !== 'weekly')
@@ -669,8 +661,8 @@ function handle_report($type)
     $db = get_db();
     $targetDate = $_GET['date'] ?? date('Y-m-d');
 
-    // date('N') restituisce 1 per Lunedì e 7 per Domenica.
-    // Sottraendo (date('N') - 1) giorni, troviamo esattamente il Lunedì della settimana in corso.
+    // date('N') restituisce 1 per LunedÃ¬ e 7 per Domenica.
+    // Sottraendo (date('N') - 1) giorni, troviamo esattamente il LunedÃ¬ della settimana in corso.
     $daysToSubtract = date('N', strtotime($targetDate)) - 1;
     $thisWeekStart = date('Y-m-d', strtotime("-{$daysToSubtract} days", strtotime($targetDate)));
 
@@ -742,7 +734,7 @@ function handle_report($type)
     ]);
 }
 
-// ─── SERVE CHART (IMAGE) ─────────────────────────
+//  SERVE CHART (IMAGE)
 function handle_serve_chart($filename)
 {
     if (!$filename)
@@ -784,7 +776,7 @@ function handle_serve_chart($filename)
     exit;
 }
 
-// ─── SERVE MEDIA (AUDIO/SPECTROGRAM) ─────────────────────────
+//  SERVE MEDIA (AUDIO/SPECTROGRAM)
 function handle_serve_media($filepath)
 {
     if (!$filepath)
@@ -825,7 +817,7 @@ function handle_serve_media($filepath)
     exit;
 }
 
-// ─── RECORDING LENGTH (No Auth) ──────────────────
+//  RECORDING LENGTH (No Auth) 
 function handle_recording_length($method)
 {
     if ($method === 'GET') {
@@ -835,14 +827,14 @@ function handle_recording_length($method)
     json_error('Metodo non supportato', 405);
 }
 
-// ─── DATABASE LANG (No Auth) ─────────────────────
+//  DATABASE LANG (No Auth) 
 function handle_database_lang()
 {
     $config = get_config();
     json_success(['DATABASE_LANG' => $config['DATABASE_LANG'] ?? 'en']);
 }
 
-// ─── CONFIG ──────────────────────────────────────
+//  CONFIG 
 function handle_config($method)
 {
     if ($method === 'GET') {
@@ -1000,7 +992,7 @@ function handle_config($method)
     json_error('Metodo non supportato', 405);
 }
 
-// ─── SERVICES ────────────────────────────────────
+//  SERVICES 
 function handle_services($method, $serviceName)
 {
     $services = [
@@ -1060,7 +1052,7 @@ function handle_services($method, $serviceName)
     json_error('Metodo non supportato', 405);
 }
 
-// ─── SYSTEM ──────────────────────────────────────
+//  SYSTEM 
 function handle_system($method, $action)
 {
     // GET is allowed only for 'info' (read-only); all other actions require POST
@@ -1095,11 +1087,14 @@ function handle_system($method, $action)
             break;
 
         case 'info':
-            // __ROOT__ is always the BirdNET-Pi project root — more reliable than
+            // __ROOT__ is always the BirdNET-Pi project root â€” more reliable than
             // "cd $home/BirdNET-Pi" which depends on the web-server user's HOME.
             $gitRepo = __ROOT__;
-            $gitHash = trim(shell_exec("git -C $gitRepo rev-parse --short HEAD 2>/dev/null") ?? '');
-            $gitBranch = trim(shell_exec("git -C $gitRepo rev-parse --abbrev-ref HEAD 2>/dev/null") ?? '');
+            // www-data has a minimal PATH; resolve git's location explicitly.
+            chdir($home);
+            $gitBin = trim(shell_exec('which git 2>/dev/null') ?? '') ?: '/usr/bin/git';
+            $gitHash = trim(shell_exec("sudo -u pi $gitBin -C $gitRepo rev-parse --short HEAD 2>&1") ?? '');
+            $gitBranch = trim(shell_exec("sudo -u pi $gitBin -C $gitRepo rev-parse --abbrev-ref HEAD 2>/dev/null") ?? '');
             $uptime = trim(shell_exec('uptime -p 2>/dev/null') ?? '');
             $diskUsage = trim(shell_exec("df -h / | tail -1 | awk '{print $3\"/\"$2\" (\"$5\" used)\"}'") ?? '');
             $memUsage = trim(shell_exec("free -h | grep Mem | awk '{print $3\"/\"$2}'") ?? '');
@@ -1107,7 +1102,7 @@ function handle_system($method, $action)
 
             // Count commits behind the remote (uses cached fetch; non-blocking)
             $commitsBehind = $gitBranch !== ''
-                ? (int)trim(shell_exec("git -C $gitRepo rev-list HEAD..origin/$gitBranch --count 2>/dev/null") ?? '0')
+                ? (int)trim(shell_exec("sudo -u pi $gitBin -C $gitRepo rev-list HEAD..origin/$gitBranch --count 2>/dev/null") ?? '0')
                 : 0;
 
             $infoResponse = [
@@ -1174,7 +1169,7 @@ function handle_system($method, $action)
     }
 }
 
-// ─── SPECIES LISTS ───────────────────────────────
+//  SPECIES LISTS 
 function handle_species_lists($method, $type)
 {
     $home = get_home();
@@ -1253,7 +1248,7 @@ function handle_species_lists($method, $type)
     json_error('Metodo non supportato', 405);
 }
 
-// ─── IMAGE ───────────────────────────────────────
+//  IMAGE
 function handle_image($sciName)
 {
     if (!$sciName)
@@ -1282,7 +1277,7 @@ function handle_image($sciName)
     }
 }
 
-// ─── STREAM INFO ─────────────────────────────────
+//  STREAM INFO
 function handle_stream_info()
 {
     $config = get_config();
@@ -1293,7 +1288,7 @@ function handle_stream_info()
     ]);
 }
 
-// ─── EBIRD EXPORT ────────────────────────────────
+// EBIRD EXPORT 
 function handle_ebird($method, $id)
 {
     if ($method === 'GET' && $id === 'location') {
