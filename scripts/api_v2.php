@@ -772,6 +772,13 @@ function handle_serve_chart($filename)
     header("Content-Length: " . filesize($path));
     // Cache for 1 day
     header("Cache-Control: public, max-age=86400");
+
+    // Clear any output buffer to avoid memory issues with large files
+    while (ob_get_level()) {
+        ob_end_clean();
+    }
+    flush();
+
     readfile($path);
     exit;
 }
@@ -826,6 +833,13 @@ function handle_serve_media($filepath)
     header("Content-Type: $mime");
     header("Content-Length: " . filesize($mediaPath));
     header("Cache-Control: public, max-age=86400");
+
+    // Clear any output buffer to avoid memory issues with large files
+    while (ob_get_level()) {
+        ob_end_clean();
+    }
+    flush();
+
     readfile($mediaPath);
     exit;
 }
