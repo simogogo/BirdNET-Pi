@@ -1,11 +1,11 @@
-<?php
+﻿<?php
 ob_start();
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
 /**
  * BirdNET-Pi REST API v2
  * 
  * API completa per l'app Flutter BirdNET-Pi.
- * Fornisce endpoints JSON per tutte le funzionalità  del frontend PHP.
+ * Fornisce endpoints JSON per tutte le funzionalità del frontend PHP.
  * 
  * Routing: /api/v2/{resource}[/{id}][/{action}]
  */
@@ -164,7 +164,7 @@ function handle_auth($method, $action)
         $validUser = 'birdnet';
         $validPass = $config['CADDY_PWD'] ?? '';
 
-        // Se CADDY_PWD non è impostata (prima installazione), basta lo username corretto
+        // Se CADDY_PWD non e' impostata (prima installazione), basta lo username corretto
         if ($username === $validUser && ($validPass === '' || $password === $validPass)) {
             json_success(['authenticated' => true]);
         }
@@ -661,8 +661,8 @@ function handle_report($type)
     $db = get_db();
     $targetDate = $_GET['date'] ?? date('Y-m-d');
 
-    // date('N') restituisce 1 per LunedÃ¬ e 7 per Domenica.
-    // Sottraendo (date('N') - 1) giorni, troviamo esattamente il LunedÃ¬ della settimana in corso.
+    // date('N') restituisce 1 per Lunedi' e 7 per Domenica.
+    // Sottraendo (date('N') - 1) giorni, troviamo esattamente il Lunedi' della settimana in corso.
     $daysToSubtract = date('N', strtotime($targetDate)) - 1;
     $thisWeekStart = date('Y-m-d', strtotime("-{$daysToSubtract} days", strtotime($targetDate)));
 
@@ -1087,7 +1087,7 @@ function handle_system($method, $action)
             break;
 
         case 'info':
-            // __ROOT__ is always the BirdNET-Pi project root â€” more reliable than
+            // __ROOT__ is always the BirdNET-Pi project root -- more reliable than
             // "cd $home/BirdNET-Pi" which depends on the web-server user's HOME.
             $gitRepo = __ROOT__;
             // www-data has a minimal PATH; resolve git's location explicitly.
