@@ -1038,11 +1038,29 @@ function handle_services($method, $serviceName)
             json_error("Azione non valida. Valori ammessi: " . implode(', ', $validActions), 400);
         }
 
-        $output = shell_exec("sudo systemctl $action $svcName 2>&1");
-
-        // Se il servizio e' livestream, replica l'azione su icecast2 (come da richiesta)
-        if ($serviceName === 'livestream') {
-            shell_exec("sudo systemctl $action icecast2.service 2>&1");
+        if ($action === 'disable') {
+            $output = shell_exec("sudo systemctl disable --now $svcName 2>&1");
+            if ($serviceName === 'livestream') {
+                shell_exec("sudo systemctl disable icecast2.service 2>&1");
+                shell_exec("sudo systemctl stop icecast2.service 2>&1");
+            }
+        }
+        elseif ($action === 'enable') {
+            if ($serviceName === 'livestream') {
+                shell_exec("sudo systemctl enable icecast2.service 2>&1");
+                shell_exec("sudo systemctl start icecast2.service 2>&1");
+                $output = shell_exec("sudo systemctl enable --now  livestream.service 2>&1");
+                $output .= "\n" . shell_exec("sudo systemctl start livestream.service 2>&1");
+            }
+            else {
+                $output = shell_exec("sudo systemctl enable --now  $svcName 2>&1");
+            }
+        }
+        else {
+            $output = shell_exec("sudo systemctl $action $svcName 2>&1");
+            if ($serviceName === 'livestream') {
+                shell_exec("sudo systemctl $action icecast2.service 2>&1");
+            }
         }
 
         $newStatus = trim(shell_exec("systemctl is-active $svcName 2>/dev/null") ?? 'unknown');
@@ -1431,16 +1449,12 @@ function handle_ebird($method, $id)
         if (empty($files))
             json_error('No files to zip', 400);
 
-        $zipFileName = "eBird_Export_{$date}.zip";
-        $webZipDir = "export_zips";
-        $realZipDir = __ROOT__ . "/export_zips";
+        $config = get_config();
+        $extractedDir = isset($config['EXTRACTED']) ? rtrim($config['EXTRACTED'], '/') : (__ROOT__ . "/Extracted");
 
-        if (!file_exists(__ROOT__ . "/homepage")) {
-            $realZipDir = __ROOT__ . "/export_zips";
-        }
-        else {
-            $webZipDir = "/export_zips";
-        }
+        $zipFileName = "eBird_Export_{$date}.zip";
+        $realZipDir = $extractedDir . "/eBirdZips";
+        $webZipDir = "/eBirdZips";
 
         if (!file_exists($realZipDir))
             @mkdir($realZipDir, 0777, true);
