@@ -1075,37 +1075,40 @@ function handle_system($method, $action)
 
     switch ($action) {
         case 'reboot':
-            shell_exec('sudo reboot &');
+            shell_exec('nohup sudo reboot > /dev/null 2>&1 &');
             json_success(['message' => 'Riavvio in corso...']);
             break;
 
         case 'shutdown':
-            shell_exec('sudo shutdown now &');
+            shell_exec('nohup sudo shutdown now > /dev/null 2>&1 &');
             json_success(['message' => 'Spegnimento in corso...']);
             break;
 
         case 'update':
-            shell_exec("sudo -u $user $home/BirdNET-Pi/scripts/update_birdnet.sh &");
+            shell_exec("nohup sudo -u $user $home/BirdNET-Pi/scripts/update_birdnet.sh > /dev/null 2>&1 &");
             json_success(['message' => 'Aggiornamento avviato']);
             break;
 
         case 'clear-data':
-            shell_exec("sudo -u $user $home/BirdNET-Pi/scripts/clear_all_data.sh &");
+            shell_exec("nohup sudo -u $user $home/BirdNET-Pi/scripts/clear_all_data.sh > /dev/null 2>&1 &");
             json_success(['message' => 'Cancellazione dati avviata']);
             break;
 
         case 'info':
-            $gitHash = trim(shell_exec("cd $home/BirdNET-Pi && git rev-parse --short HEAD 2>/dev/null") ?? '');
-            $gitBranch = trim(shell_exec("cd $home/BirdNET-Pi && git rev-parse --abbrev-ref HEAD 2>/dev/null") ?? '');
+            // __ROOT__ is always the BirdNET-Pi project root — more reliable than
+            // "cd $home/BirdNET-Pi" which depends on the web-server user's HOME.
+            $gitRepo = __ROOT__;
+            $gitHash = trim(shell_exec("git -C $gitRepo rev-parse --short HEAD 2>/dev/null") ?? '');
+            $gitBranch = trim(shell_exec("git -C $gitRepo rev-parse --abbrev-ref HEAD 2>/dev/null") ?? '');
             $uptime = trim(shell_exec('uptime -p 2>/dev/null') ?? '');
             $diskUsage = trim(shell_exec("df -h / | tail -1 | awk '{print $3\"/\"$2\" (\"$5\" used)\"}'") ?? '');
             $memUsage = trim(shell_exec("free -h | grep Mem | awk '{print $3\"/\"$2}'") ?? '');
             $cpuTemp = trim(shell_exec("vcgencmd measure_temp 2>/dev/null | cut -d= -f2") ?? '');
 
             // Count commits behind the remote (uses cached fetch; non-blocking)
-            $commitsBehind = (int)trim(
-                shell_exec("cd $home/BirdNET-Pi && git rev-list HEAD..origin/$gitBranch --count 2>/dev/null") ?? '0'
-            );
+            $commitsBehind = $gitBranch !== ''
+                ? (int)trim(shell_exec("git -C $gitRepo rev-list HEAD..origin/$gitBranch --count 2>/dev/null") ?? '0')
+                : 0;
 
             $infoResponse = [
                 'git_hash' => $gitHash,
