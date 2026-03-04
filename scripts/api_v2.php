@@ -1143,6 +1143,8 @@ function handle_system($method, $action)
                 'birdnet_log.service',
                 'chart_viewer.service',
                 'extraction.service',
+                'icecast2.service',
+                'livestream.service',
             ];
             foreach ($coreServices as $svc) {
                 shell_exec("sudo systemctl stop $svc 2>&1");
@@ -1158,6 +1160,8 @@ function handle_system($method, $action)
                 'birdnet_log.service',
                 'chart_viewer.service',
                 'extraction.service',
+                'icecast2.service',
+                'livestream.service',
             ];
             foreach ($coreServices as $svc) {
                 shell_exec("sudo systemctl restart $svc 2>&1");
