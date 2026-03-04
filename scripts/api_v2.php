@@ -1017,7 +1017,7 @@ function handle_services($method, $serviceName)
                 'service_name' => $svc['name'],
                 'label' => $svc['label'],
                 'status' => $status,
-                'enabled' => $enabled === 'enabled',
+                'enabled' => in_array($enabled, ['enabled', 'linked', 'static']),
             ];
         }
         json_success(['services' => $result]);
@@ -1070,7 +1070,7 @@ function handle_services($method, $serviceName)
             'service' => $serviceName,
             'action' => $action,
             'new_status' => $newStatus,
-            'new_enabled' => $newEnabled === 'enabled',
+            'new_enabled' => in_array($newEnabled, ['enabled', 'linked', 'static']),
             'output' => trim($output ?? ''),
         ]);
     }
