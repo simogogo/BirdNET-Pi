@@ -1099,7 +1099,7 @@ function handle_system($method, $action)
             $diskUsage = trim(shell_exec("df -h / | tail -1 | awk '{print $3\"/\"$2\" (\"$5\" used)\"}'") ?? '');
             $memUsage = trim(shell_exec("free -h | grep Mem | awk '{print $3\"/\"$2}'") ?? '');
             $cpuTemp = trim(shell_exec("vcgencmd measure_temp 2>/dev/null | cut -d= -f2") ?? '');
-            trim(shell_exec("sudo -u pi $gitBin -C $gitRepo rev-list --count HEAD..@{u} 2>/dev/null"));
+            trim(shell_exec("sudo -u pi $gitBin -C $gitRepo fetch 2>/dev/null"));
 
             // Count commits behind the remote (uses cached fetch; non-blocking)
             $commitsBehind = $gitBranch !== ''
