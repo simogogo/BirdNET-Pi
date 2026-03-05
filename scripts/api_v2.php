@@ -1190,17 +1190,17 @@ function handle_system($method, $action)
             // www-data has a minimal PATH; resolve git's location explicitly.
             chdir($home);
             $gitBin = trim(shell_exec('which git 2>/dev/null') ?? '') ?: '/usr/bin/git';
-            $gitHash = trim(shell_exec("sudo -u pi $gitBin -C $gitRepo rev-parse --short HEAD 2>/dev/null") ?? '');
-            $gitBranch = trim(shell_exec("sudo -u pi $gitBin -C $gitRepo rev-parse --abbrev-ref HEAD ") ?? '');
+            $gitHash = trim(shell_exec("sudo -u $user $gitBin -C $gitRepo rev-parse --short HEAD 2>/dev/null") ?? '');
+            $gitBranch = trim(shell_exec("sudo -u $user $gitBin -C $gitRepo rev-parse --abbrev-ref HEAD ") ?? '');
             $uptime = trim(shell_exec('uptime -p 2>/dev/null') ?? '');
             $diskUsage = trim(shell_exec("df -h / | tail -1 | awk '{print $3\"/\"$2\" (\"$5\" used)\"}'") ?? '');
             $memUsage = trim(shell_exec("free -h | grep Mem | awk '{print $3\"/\"$2}'") ?? '');
             $cpuTemp = trim(shell_exec("vcgencmd measure_temp 2>/dev/null | cut -d= -f2") ?? '');
-            trim(shell_exec("sudo -u pi $gitBin -C $gitRepo fetch 2>/dev/null"));
+            trim(shell_exec("sudo -u $user $gitBin -C $gitRepo fetch 2>/dev/null"));
 
             // Count commits behind the remote (uses cached fetch; non-blocking)
             $commitsBehind = $gitBranch !== ''
-                ? (int)trim(shell_exec("sudo -u pi $gitBin -C $gitRepo rev-list HEAD..origin/$gitBranch --count 2>/dev/null") ?? '0')
+                ? (int)trim(shell_exec("sudo -u $user $gitBin -C $gitRepo rev-list HEAD..origin/$gitBranch --count 2>/dev/null") ?? '0')
                 : 0;
 
             $infoResponse = [
