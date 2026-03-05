@@ -129,7 +129,12 @@ try {
             handle_image($id);
             break;
         case 'stream':
-            handle_stream_info();
+            if ($id === 'detections') {
+                handle_stream_detections();
+            }
+            else {
+                handle_stream_info();
+            }
             break;
         case 'ebird':
             handle_ebird($method, $id);
@@ -1391,6 +1396,91 @@ function handle_stream_info()
         'description' => 'BirdNET-Pi Live Audio Stream',
     ]);
 }
+
+// STREAM DETECTIONS
+function handle_stream_detections()
+{
+    $config = get_config();
+
+    $RECS_DIR = $config["RECS_DIR"];
+    if (empty($RECS_DIR)) {
+        $home = get_home() ?: __ROOT__;
+        $RECS_DIR = "$home/BirdSongs/Extracted"; // Fallback to extracted if RECS_DIR is missing
+    }
+
+    // We should look in the BirdSongs directory, normally RECS_DIR is "BirdSongs"
+    // Wait, let's just make sure we get the correct path. In spectrogram.php:
+    // $RECS_DIR = $config["RECS_DIR"];
+    // $STREAM_DATA_DIR = $RECS_DIR . "/StreamData/";
+    $STREAM_DATA_DIR = rtrim($RECS_DIR, '/') . "/StreamData/";
+
+    $newest_file = '';
+
+    if (empty($config['RTSP_STREAM'])) {
+        $look_in_directory = $STREAM_DATA_DIR;
+        if (file_exists($look_in_directory) && is_dir($look_in_directory)) {
+            $files = scandir($look_in_directory, SCANDIR_SORT_ASCENDING);
+            if (isset($files[2])) {
+                $newest_file = $files[2];
+            }
+        }
+    }
+    else {
+        $look_in_directory = $STREAM_DATA_DIR;
+
+        if (file_exists($look_in_directory) && is_dir($look_in_directory)) {
+            $files = scandir($look_in_directory, SCANDIR_SORT_ASCENDING);
+
+            if (!empty($config['RTSP_STREAM_TO_LIVESTREAM']) && is_numeric($config['RTSP_STREAM_TO_LIVESTREAM'])) {
+                $RTSP_STREAM_LISTENED_TO = ((int)$config['RTSP_STREAM_TO_LIVESTREAM'] + 1);
+            }
+            else {
+                $RTSP_STREAM_LISTENED_TO = 1;
+            }
+
+            foreach ($files as $stream_file_name) {
+                if ($stream_file_name != "." && $stream_file_name != "..") {
+                    if (stripos($stream_file_name, 'RTSP_' . $RTSP_STREAM_LISTENED_TO) !== false && stripos($stream_file_name, '.wav.json') !== false) {
+                        $newest_file = $stream_file_name;
+                    }
+                }
+            }
+        }
+    }
+
+    $req_newest_file = $_GET['newest_file'] ?? '';
+
+    // If the client already has this file, return empty response to save bandwidth
+    if (!empty($newest_file) && $newest_file === $req_newest_file) {
+        json_success(['newest_file_match' => true]);
+        return;
+    }
+
+    if (!empty($newest_file) && file_exists($look_in_directory . $newest_file)) {
+        $contents = file_get_contents($look_in_directory . $newest_file);
+        if ($contents !== false) {
+            $json = json_decode($contents, true);
+            if ($json !== null) {
+                $datetime = DateTime::createFromFormat(DateTime::ISO8601, $json['timestamp']);
+                $now = new DateTime();
+                $interval = $now->diff($datetime);
+                // Total seconds elapsed
+                $seconds = ($interval->days * 24 * 60 * 60) +
+                    ($interval->h * 60 * 60) +
+                    ($interval->i * 60) +
+                    $interval->s;
+
+                $json['delay'] = $seconds;
+                $json['file_name'] = $newest_file; // explicitly inject filename for the client
+                json_success($json);
+                return;
+            }
+        }
+    }
+
+    json_success(['detections' => []]);
+}
+
 
 // EBIRD EXPORT 
 function handle_ebird($method, $id)
