@@ -708,6 +708,7 @@ function handle_report($type)
     // Sottraendo (date('N') - 1) giorni, troviamo esattamente il Lunedi' della settimana in corso.
     $daysToSubtract = date('N', strtotime($targetDate)) - 1;
     $thisWeekStart = date('Y-m-d', strtotime("-{$daysToSubtract} days", strtotime($targetDate)));
+    $thisWeekEnd = date('Y-m-d', strtotime("+6 days", strtotime($thisWeekStart)));
 
     // La settimana precedente inizia 7 giorni prima di $thisWeekStart
     $lastWeekStart = date('Y-m-d', strtotime("-7 days", strtotime($thisWeekStart)));
@@ -718,7 +719,7 @@ function handle_report($type)
                           WHERE Date >= :start AND Date <= :end
                           GROUP BY Sci_Name ORDER BY count DESC");
     $stmt->bindValue(':start', $thisWeekStart);
-    $stmt->bindValue(':end', $targetDate);
+    $stmt->bindValue(':end', $thisWeekEnd);
     ensure_db_ok($stmt);
     $thisWeek = [];
     $r = $stmt->execute();
@@ -766,7 +767,7 @@ function handle_report($type)
 
     json_success([
         'period_start' => $thisWeekStart,
-        'period_end' => $targetDate,
+        'period_end' => $thisWeekEnd,
         'total_detections' => $totalThisWeek,
         'total_previous' => $totalLastWeek,
         'total_percent_change' => $totalPctChange,
