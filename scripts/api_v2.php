@@ -1544,7 +1544,7 @@ function handle_ebird($method, $id)
         ]);
     }
 
-    if ($method === 'GET' && $id === 'detections') {
+    if ($method === 'GET' && $id === 'ebirddetections') {
         $date = $_GET['date'] ?? null;
         if (!$date)
             json_error('Date parameter required', 400);
