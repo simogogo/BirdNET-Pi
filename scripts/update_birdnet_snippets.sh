@@ -267,6 +267,8 @@ fi
 
 sqlite3 $HOME/BirdNET-Pi/scripts/birds.db << EOF
 CREATE INDEX IF NOT EXISTS "detections_Sci_Name" ON "detections" ("Sci_Name");
+CREATE INDEX IF NOT EXISTS "detections_Sciname_Date" ON "detections" ("Sci_Name", "Date");
+CREATE INDEX IF NOT EXISTS "detections_Sciname_Date_Confidence" ON "detections" ("Sci_Name", "Date", "Confidence");
 EOF
 
 # update snippets above
