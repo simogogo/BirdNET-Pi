@@ -14,7 +14,7 @@ if (!defined('__ROOT__')) {
     define('__ROOT__', dirname(__DIR__));
 }
 require_once(__ROOT__ . '/scripts/common.php');
-
+session_write_close();
 //  CORS & Headers
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
