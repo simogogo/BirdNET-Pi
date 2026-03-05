@@ -254,13 +254,23 @@ function handle_detections($method, $id)
     $stmt->bindValue(':offset', $offset, SQLITE3_INTEGER);
     ensure_db_ok($stmt);
 
+    $excludeFile = rtrim($home, '/') . "/BirdNET-Pi/scripts/disk_check_exclude.txt";
+    $disk_check_exclude_arr = [];
+    if (file_exists($excludeFile)) {
+        $fp = @fopen($excludeFile, 'r');
+        if ($fp) {
+            $disk_check_exclude_arr = explode("\n", fread($fp, filesize($excludeFile)));
+            fclose($fp);
+        }
+    }
+
     $result = $stmt->execute();
     $detections = [];
     while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
         $row['Confidence'] = floatval($row['Confidence']);
         $comName = str_replace([' ', "'"], ['_', ''], $row['Com_Name']);
-        $filePath = rtrim($home, '/') . "/BirdSongs/Extracted/By_Date/{$row['Date']}/{$comName}/{$row['File_Name']}";
-        $row['is_locked'] = file_exists($filePath . '.locked');
+        $fileRelPath = "{$row['Date']}/{$comName}/{$row['File_Name']}";
+        $row['is_locked'] = in_array($fileRelPath, $disk_check_exclude_arr);
         $detections[] = $row;
     }
 
@@ -429,14 +439,25 @@ function handle_recordings($method, $id, $action)
             $stmt->bindValue(':limit', $limit, SQLITE3_INTEGER);
             ensure_db_ok($stmt);
 
+            $excludeFile = rtrim($home, '/') . "/BirdNET-Pi/scripts/disk_check_exclude.txt";
+            $disk_check_exclude_arr = [];
+            if (file_exists($excludeFile)) {
+                $fp = @fopen($excludeFile, 'r');
+                if ($fp) {
+                    $disk_check_exclude_arr = explode("\n", fread($fp, filesize($excludeFile)));
+                    fclose($fp);
+                }
+            }
+
             $recordings = [];
             $result = $stmt->execute();
             while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
                 $comName = str_replace([' ', "'"], ['_', ''], $row['Com_Name']);
-                $filePath = $home . "/BirdSongs/Extracted/By_Date/{$row['Date']}/{$comName}/{$row['File_Name']}";
+                $fileRelPath = "{$row['Date']}/{$comName}/{$row['File_Name']}";
+                $filePath = rtrim($home, '/') . "/BirdSongs/Extracted/By_Date/" . $fileRelPath;
                 $row['Confidence'] = floatval($row['Confidence']);
                 $row['file_exists'] = file_exists($filePath);
-                $row['is_locked'] = file_exists($filePath . '.locked');
+                $row['is_locked'] = in_array($fileRelPath, $disk_check_exclude_arr);
                 $recordings[] = $row;
             }
 
@@ -458,24 +479,26 @@ function handle_recordings($method, $id, $action)
                 json_error('File non trovato nel database', 404);
 
             $comName = str_replace([' ', "'"], ['_', ''], $row['Com_Name']);
-            $filePath = $home . "/BirdSongs/Extracted/By_Date/{$row['Date']}/{$comName}/{$fileName}";
+            $fileRelativePath = "{$row['Date']}/{$comName}/{$fileName}";
+            $filePath = rtrim($home, '/') . "/BirdSongs/Extracted/By_Date/" . $fileRelativePath;
 
-            // Delete physical files
-            $deleted = [];
-            foreach ([$filePath, $filePath . '.png', $filePath . '.locked'] as $f) {
-                if (file_exists($f)) {
-                    unlink($f);
-                    $deleted[] = basename($f);
+            $output = [];
+            $cmd = "sudo rm " . escapeshellarg($filePath) . " 2>&1 && sudo rm " . escapeshellarg($filePath . ".png") . " 2>&1";
+            if (!exec($cmd, $output)) {
+                $dbRw = get_db_rw();
+                $delStmt = $dbRw->prepare("DELETE FROM detections WHERE File_Name = :fn LIMIT 1");
+                $delStmt->bindValue(':fn', $fileName);
+                $result1 = $delStmt->execute();
+
+                if ($result1 === false || $dbRw->changes() === 0) {
+                    json_error('Error - database line deletion failed : ' . $dbRw->lastErrorMsg(), 500);
                 }
+
+                json_success(['deleted' => true, 'db_rows_affected' => $dbRw->changes()]);
             }
-
-            // Delete from database
-            $dbRw = get_db_rw();
-            $delStmt = $dbRw->prepare("DELETE FROM detections WHERE File_Name = :fn");
-            $delStmt->bindValue(':fn', $fileName);
-            $delStmt->execute();
-
-            json_success(['deleted' => $deleted, 'db_rows_affected' => $dbRw->changes()]);
+            else {
+                json_error('Error - file deletion failed : ' . implode(", ", $output), 500);
+            }
             break;
 
         case 'PUT':
@@ -492,13 +515,15 @@ function handle_recordings($method, $id, $action)
                 if (empty($newName))
                     json_error('new_name richiesto', 400);
 
-                $dbRw = get_db_rw();
-                $stmt = $dbRw->prepare("UPDATE detections SET Com_Name = :newname WHERE File_Name = :fn");
-                $stmt->bindValue(':newname', $newName);
-                $stmt->bindValue(':fn', $fileName);
-                $stmt->execute();
-
-                json_success(['updated' => $dbRw->changes() > 0, 'new_name' => $newName]);
+                $output = [];
+                // Execute backend script just like play.php
+                $cmd = "sudo -u " . escapeshellarg($user) . " " . escapeshellarg($home . "/BirdNET-Pi/scripts/birdnet_changeidentification.sh") . " " . escapeshellarg($fileName) . " " . escapeshellarg($newName) . " log_errors 2>&1";
+                if (!exec($cmd, $output)) {
+                    json_success(['updated' => true, 'new_name' => $newName]);
+                }
+                else {
+                    json_error('Error : ' . implode(", ", $output), 500);
+                }
             }
             elseif ($action === 'lock' || isset($body['locked'])) {
                 // Toggle lock
@@ -510,15 +535,33 @@ function handle_recordings($method, $id, $action)
                     json_error('File non trovato', 404);
 
                 $comName = str_replace([' ', "'"], ['_', ''], $row['Com_Name']);
-                $filePath = $home . "/BirdSongs/Extracted/By_Date/{$row['Date']}/{$comName}/{$fileName}";
-                $lockFile = $filePath . '.locked';
+                $fileRelPath = "{$row['Date']}/{$comName}/{$fileName}";
+                $excludeFile = rtrim($home, '/') . "/BirdNET-Pi/scripts/disk_check_exclude.txt";
+
+                if (!file_exists($excludeFile)) {
+                    file_put_contents($excludeFile, "##start\n##end\n");
+                }
 
                 if ($lock) {
-                    touch($lockFile);
+                    $myfile = fopen($excludeFile, "a");
+                    if ($myfile) {
+                        fwrite($myfile, $fileRelPath . "\n");
+                        fwrite($myfile, $fileRelPath . ".png\n");
+                        fclose($myfile);
+                    }
+                    else {
+                        json_error('Unable to open exclude file', 500);
+                    }
                 }
                 else {
-                    if (file_exists($lockFile))
-                        unlink($lockFile);
+                    $lines = file($excludeFile);
+                    $resultStr = '';
+                    foreach ($lines as $line) {
+                        if (stripos($line, $fileRelPath) === false && stripos($line, $fileRelPath . ".png") === false) {
+                            $resultStr .= $line;
+                        }
+                    }
+                    file_put_contents($excludeFile, $resultStr);
                 }
 
                 json_success(['locked' => $lock]);
