@@ -180,7 +180,7 @@ The bird names are in English by default, but other localized versions are avail
 
 
 ## Screenshots
-Coming soon, but giv this project a try, You'll be surprised!
+Coming soon, but give this project a try, You'll be surprised!
 
 
 ## :thinking:
