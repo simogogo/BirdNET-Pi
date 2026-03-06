@@ -142,6 +142,9 @@ try {
         case 'auth':
             handle_auth($method, $id);
             break;
+        case 'logs':
+            handle_logs();
+            break;
         case 'ping':
             json_success(['pong' => true, 'version' => '2.0', 'timestamp' => date('c')]);
             break;
@@ -1665,4 +1668,60 @@ function handle_ebird($method, $id)
     }
 
     json_error('Endpoint ebird non trovato o metodo non supportato', 404);
+}
+
+// LOGS
+function handle_logs()
+{
+    //require_auth();
+    $cursor = $_GET['cursor'] ?? null;
+    $lines = intval($_GET['lines'] ?? 100);
+
+    $user = get_user();
+
+    $command = "sudo -u $user journalctl --no-hostname -q -o short --show-cursor";
+    if ($cursor) {
+        $command .= " --after-cursor=" . escapeshellarg($cursor);
+    }
+    else {
+        $command .= " -n " . $lines;
+    }
+    $command .= " -u birdnet_analysis -u birdnet_recording 2>&1";
+
+    exec($command, $output);
+
+    $newCursor = $cursor;
+    $cleanLogs = [];
+    $datePrefix = date("M d ");
+    $home = get_home();
+
+    foreach ($output as $line) {
+        if (preg_match('/^-- cursor: (.*)$/', $line, $matches)) {
+            $newCursor = $matches[1];
+        }
+        else {
+            // Cleaning logic equivalent to the sed command
+            // 1. Remove date (e.g. "Mar 06 ")
+            $line = str_replace($datePrefix, "", $line);
+
+            // 2. Remove $HOME path
+            if ($home) {
+                $line = str_replace($home . "/", "", $line);
+            }
+
+            // 3. Filter out lines containing "Line", "find", "systemd"
+            if (preg_match('/Line|find|systemd/', $line))
+                continue;
+
+            // 4. Transform " hostname[pid]: " into "---"
+            $line = preg_replace('/ .*\[.*\]: /', '---', $line);
+
+            $cleanLogs[] = $line;
+        }
+    }
+
+    json_success([
+        'logs' => $cleanLogs,
+        'cursor' => $newCursor
+    ]);
 }
