@@ -15,6 +15,14 @@ Icon made by <a href="https://www.freepik.com" title="Freepik">Freepik</a> from 
 
 ## About this fork:
 I've been building on [mcguirepr89's](https://github.com/mcguirepr89/BirdNET-Pi) most excellent work to further update and improve BirdNET-Pi. Maybe someone will find it useful.
+Nachtzuster (https://github.com/Nachtzuster/BirdNET-Pi) is currently doing a great job mantaining this project.
+
+The idea of this fork is to implement a flutter frontend for most of the project. Some features as phpsysinfo, db maintenance, Tiny file manager and Web terminal will be linked in the flutter app.
+
+At the moment the coverage of legacy frontend features is arount 80%.
+
+This fork indroduces also a new feature:
+ - eBird daily CSV (and daily recordings) export
 
 Changes include:
 
@@ -31,7 +39,7 @@ Changes include:
  - Rework daily_plot.py (chart_viewer) to run as a daemon to avoid the very expensive startup
  - Lots of fixes & cleanups
 
-!! note: see 'Migrating' on how to migrate from mcguirepr89
+!! note: see 'Migrating' on how to migrate from Nachtzuster
 
 ## Introduction
 BirdNET-Pi is built on the [BirdNET framework](https://github.com/kahst/BirdNET-Analyzer) by [**@kahst**](https://github.com/kahst) <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/"><img src="https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg"></a> using [pre-built TFLite binaries](https://github.com/PINTO0309/TensorflowLite-bin) by [**@PINTO0309**](https://github.com/PINTO0309) . It is able to recognize bird sounds from a USB microphone or sound card in realtime and share its data with the rest of the world.
@@ -98,9 +106,7 @@ Please take a look at the [wiki](https://github.com/mcguirepr89/BirdNET-Pi/wiki)
 Use the web interface and go to "Tools" > "System Controls" > "Update". If you encounter any issues with that, or suspect that the update did not work for some reason, please save its output and post it in an issue where we can help.
 
 ## Backup and Restore
-Use the web interface and go to "Tools" > "System Controls" > "Backup" or "Restore". Backup/Restore is primary meant for migrating your data for one system to another. Since the time required to create or restore a backup depends on the size of the data set and the speed of the storage, this could take quite a while.
-
-Alternatively, the backup script can be used directly. These examples assume the backup medium is mounted on `/mnt`
+Web feature has not yet been migrated to flutter. Please use the command line to backup/restore
 
 To backup:
 ```commandline
@@ -135,11 +141,11 @@ Please note that upgrading your underlying OS to Bookworm is not going to work. 
 Run these commands to migrate to this repo:
 ```
 git remote remove origin
-git remote add origin https://github.com/Nachtzuster/BirdNET-Pi.git
+git remote add origin https://github.com/simogogo/BirdNET-Pi.git
 ./scripts/update_birdnet.sh
 ```
 ## Troubleshooting and Ideas
-*Hint: A lot of weird problems can be solved by simply restarting the core services. Do this from the web interface "Tools" > "Services" > "Restart Core Services"
+*Hint: A lot of weird problems can be solved by simply restarting the core services. Do this from the web interface "Tools" > "Services" > "Restart Services"
 Having trouble or have an idea? *Submit an issue for trouble* and a *discussion for ideas*. Please do *not* submit an issue as a discussion -- the issue tracker solicits information that is needed for anyone to help -- discussions are *not for issues*.
 
 PLEASE search the repo for your issue before creating a new one. This repo has nothing to do with the validity of the detection results, so please do not start any issues around "False positives."
@@ -169,14 +175,12 @@ For more information : https://github.com/alexbelgium/hassio-addons/blob/master/
 
 
 ### Internationalization:
-The bird names are in English by default, but other localized versions are available thanks to the wonderful efforts of [@patlevin](https://github.com/patlevin) and Wikipedia. Use the web interface's "Tools" > "Settings" and select your "Database Language" to have the detections in your language.
+The bird names are in English by default, but other localized versions are available thanks to the wonderful efforts of [@patlevin](https://github.com/patlevin) and Wikipedia. Use the web interface's "Tools" > "Settings" > "Basic settings" and select your "Database Language" to have the detections in your language.
 
-[Internationalization](docs/translations.md)
 
 
 ## Screenshots
-![Overview](docs/overview.png)
-![Spectrogram](docs/spectrogram.png)
+Coming soon, but giv this project a try, You'll be surprised!
 
 
 ## :thinking:
