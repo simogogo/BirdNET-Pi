@@ -237,8 +237,14 @@ function handle_detections($method, $id)
     $limit = intval($_GET['limit'] ?? 500);
     $offset = intval($_GET['offset'] ?? 0);
 
-    $where = ["Date = :date"];
-    $params = [':date' => $date];
+    // Unified logic for standard and 'recent' detections
+    $where = [];
+    $params = [];
+
+    if ($id !== 'recent') {
+        $where[] = "Date = :date";
+        $params[':date'] = $date;
+    }
 
     if ($species) {
         $where[] = "Sci_Name = :species";
@@ -249,10 +255,10 @@ function handle_detections($method, $id)
         $params[':minconf'] = $min_confidence;
     }
 
-    $whereStr = implode(' AND ', $where);
+    $whereStr = count($where) > 0 ? implode(' AND ', $where) : '1=1';
     $sql = "SELECT Date, Time, Com_Name, Sci_Name, Confidence, File_Name, Lat, Lon
             FROM detections WHERE $whereStr 
-            ORDER BY Time DESC LIMIT :limit OFFSET :offset";
+            ORDER BY Date DESC, Time DESC LIMIT :limit OFFSET :offset";
 
     $stmt = $db->prepare($sql);
     foreach ($params as $k => $v) {
