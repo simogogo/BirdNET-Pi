@@ -87,4 +87,9 @@ sudo ln -sf $my_dir/* /usr/local/bin/
 
 # The script below handles changes to the host system
 # Any additions to the updater should be placed in that file.
+sudo $my_dir/update_caddyfile.sh
 sudo $my_dir/update_birdnet_snippets.sh
+
+if [ ! -e ${EXTRACTED}/api_v2.php ];then
+  sudo_with_user ln -fs $HOME/BirdNET-Pi/scripts/api_v2.php ${EXTRACTED}
+fi
