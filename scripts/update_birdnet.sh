@@ -110,6 +110,6 @@ if [ ! -e ${EXTRACTED}/version.json ];then
   sudo_with_user ln -fs $HOME/BirdNET-Pi/homepage/version.json ${EXTRACTED}
 fi
 
-sudo_with_user ln -fs $HOME/BirdNET-Pi/homepage/assets/ ${EXTRACTED}/assets
-sudo_with_user ln -fs $HOME/BirdNET-Pi//homepage/canvaskit/ ${EXTRACTED}/canvaskit
-sudo_with_user ln -fs $HOME/BirdNET-Pi/homepage/icons/ ${EXTRACTED}/icons
+sudo_with_user ln -fs $HOME/BirdNET-Pi/homepage/assets/ ${EXTRACTED}
+sudo_with_user ln -fs $HOME/BirdNET-Pi//homepage/canvaskit/ ${EXTRACTED}
+sudo_with_user ln -fs $HOME/BirdNET-Pi/homepage/icons/ ${EXTRACTED}
