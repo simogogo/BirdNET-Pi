@@ -94,9 +94,22 @@ if [ ! -e ${EXTRACTED}/api_v2.php ];then
   sudo_with_user ln -fs $HOME/BirdNET-Pi/scripts/api_v2.php ${EXTRACTED}
 fi
 
-sudo_with_user ln -fs $my_dir/homepage/* ${EXTRACTED}
-sudo_with_user ln -fs $my_dir/homepage/*.js ${EXTRACTED}
-sudo_with_user ln -fs $my_dir/homepage/*.json ${EXTRACTED}
-sudo_with_user ln -fs $my_dir/homepage/asset* ${EXTRACTED}/asset
-sudo_with_user ln -fs $my_dir/homepage/canvaskit* ${EXTRACTED}/canvaskit
-sudo_with_user ln -fs $my_dir/homepage/icons* ${EXTRACTED}/icons
+if [ ! -e ${EXTRACTED}/flutter_bootstrap.js ];then
+  sudo_with_user ln -fs $my_dir/homepage/flutter_bootstrap.js ${EXTRACTED}
+fi
+if [ ! -e ${EXTRACTED}/flutter.js ];then
+  sudo_with_user ln -fs $my_dir/homepage/flutter.js ${EXTRACTED}
+fi
+if [ ! -e ${EXTRACTED}/main.dart.js ];then
+  sudo_with_user ln -fs $my_dir/homepage/main.dart.js ${EXTRACTED}
+fi
+if [ ! -e ${EXTRACTED}/manifest.json ];then
+  sudo_with_user ln -fs $my_dir/homepage/manifest.json ${EXTRACTED}
+fi
+if [ ! -e ${EXTRACTED}/version.json ];then
+  sudo_with_user ln -fs $my_dir/homepage/version.json ${EXTRACTED}
+fi
+
+sudo_with_user ln -fs $my_dir/homepage/assets/* ${EXTRACTED}/assets
+sudo_with_user ln -fs $my_dir/homepage/canvaskit/* ${EXTRACTED}/canvaskit
+sudo_with_user ln -fs $my_dir/homepage/icons/* ${EXTRACTED}/icons
