@@ -95,3 +95,8 @@ if [ ! -e ${EXTRACTED}/api_v2.php ];then
 fi
 
 sudo_with_user ln -fs $my_dir/homepage/* ${EXTRACTED}
+sudo_with_user ln -fs $my_dir/homepage/*.js ${EXTRACTED}
+sudo_with_user ln -fs $my_dir/homepage/*.json ${EXTRACTED}
+sudo_with_user ln -fs $my_dir/homepage/asset* ${EXTRACTED}/asset
+sudo_with_user ln -fs $my_dir/homepage/canvaskit* ${EXTRACTED}/canvaskit
+sudo_with_user ln -fs $my_dir/homepage/icons* ${EXTRACTED}/icons
