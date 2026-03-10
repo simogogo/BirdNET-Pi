@@ -19,10 +19,12 @@ Nachtzuster (https://github.com/Nachtzuster/BirdNET-Pi) is currently doing a gre
 
 The idea of this fork is to implement a flutter frontend for most of the project. Some features as phpsysinfo, db maintenance, Tiny file manager and Web terminal will be linked in the flutter app.
 
-At the moment the coverage of legacy frontend features is arount 80%.
+At the moment the coverage of legacy frontend features is arount 90%.
 
 This fork indroduces also a new feature:
  - eBird daily CSV (and daily recordings) export
+
+Flutter source code of this new frontend is available at https://github.com/simogogo/BirdNET-Pi_FlutterFrontend <- Take a look at the new fully responsive layout!
 
 Changes include:
 
