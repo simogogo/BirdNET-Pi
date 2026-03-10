@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 ob_start();
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
 /**
@@ -341,7 +341,7 @@ function handle_species($method, $id, $action)
         $info['avg_confidence'] = floatval($info['avg_confidence']);
 
         // Best detection
-        $stmt2 = $db->prepare("SELECT Date, Time, File_Name, Confidence 
+        $stmt2 = $db->prepare("SELECT Date, Time, File_Name, Confidence, Com_Name, Sci_Name 
                                FROM detections WHERE Sci_Name = :name 
                                ORDER BY Confidence DESC LIMIT 1");
         $stmt2->bindValue(':name', $sci_name);
@@ -366,18 +366,28 @@ function handle_species($method, $id, $action)
         // Image
         $config = get_config();
         try {
-            if ($config["IMAGE_PROVIDER"] === 'FLICKR') {
-                $provider = new Flickr();
+            if ($config["IMAGE_PROVIDER"] === 'NONE' || empty($config["IMAGE_PROVIDER"])) {
+                $info['image'] = null;
             }
             else {
-                $provider = new Wikipedia();
+                if ($config["IMAGE_PROVIDER"] === 'FLICKR') {
+                    $provider = new Flickr();
+                }
+                else {
+                    $provider = new Wikipedia();
+                }
+                $image = $provider->get_image($sci_name);
+                $info['image'] = $image ?: null;
             }
-            $image = $provider->get_image($sci_name);
-            $info['image'] = $image ?: null;
         }
         catch (Exception $e) {
             $info['image'] = null;
         }
+
+        // External Link Info
+        $infoUrlData = get_info_url($sci_name);
+        $info['info_url'] = $infoUrlData['URL'];
+        $info['info_title'] = $infoUrlData['TITLE'];
 
         json_success($info);
     }
@@ -1476,20 +1486,29 @@ function handle_image($sciName)
     $config = get_config();
     $sciName = urldecode($sciName);
 
+    // I processi di download e encoding Base64 possono essere gravosi su Pi
+    set_time_limit(180);
+    ini_set('memory_limit', '512M');
+
     try {
-        if ($config["IMAGE_PROVIDER"] === 'FLICKR') {
-            $provider = new Flickr();
+        if ($config["IMAGE_PROVIDER"] === 'NONE' || empty($config["IMAGE_PROVIDER"])) {
+            json_success(array('no_provider' => true));
         }
         else {
-            $provider = new Wikipedia();
-        }
-        $result = $provider->get_image($sciName);
+            if ($config["IMAGE_PROVIDER"] === 'FLICKR') {
+                $provider = new Flickr();
+            }
+            else {
+                $provider = new Wikipedia();
+            }
+            $result = $provider->get_image($sciName);
 
-        if ($result === false) {
-            json_error('Immagine non trovata', 404);
-        }
+            if ($result === false) {
+                json_error('Immagine non trovata', 404);
+            }
 
-        json_success($result);
+            json_success($result);
+        }
     }
     catch (Exception $e) {
         json_error('Errore nel recupero immagine: ' . $e->getMessage(), 500);

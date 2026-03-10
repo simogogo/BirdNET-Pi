@@ -251,7 +251,16 @@ class ImageProvider
   public function __construct()
   {
     $this->set_db();
-    $opts = ['http' => ['header' => "User-Agent: BirdNET-Pi"]];
+    // User-Agent conforme alle policy Wikimedia per evitare blocchi 429
+    $ua = "BirdNET-Pi/1.1 (https://github.com/mcguirepr89/BirdNET-Pi; birds@birdnetpi.com) Mozilla/5.0";
+    $opts = [
+      'http' => [
+        'header' => "User-Agent: $ua",
+        'timeout' => 15,
+        'follow_location' => 1,
+        'ignore_errors' => false // Vogliamo che file_get_contents ritorni false su errori HTTP
+      ]
+    ];
     $this->context = stream_context_create($opts);
   }
 
@@ -266,12 +275,36 @@ class ImageProvider
       if ($interval->days > $expire_days) {
         $image = false;
       }
+
+      // Se l'immagine è in cache ma non ha i dati Base64 (migrazione legacy), 
+      // scaricali e aggiorna il DB ora.
+      if ($image !== false && empty($image['base64_data'])) {
+        $base64 = $this->get_base64_image($image['image_url']);
+        if ($base64) {
+          $this->set_image_in_db(
+            $image['sci_name'],
+            $image['com_en_name'],
+            $image['image_url'],
+            $image['title'],
+            $image['id'],
+            $image['author_url'],
+            $image['license_url'],
+            $base64
+          );
+          $image['base64_data'] = $base64;
+        }
+      }
     }
     if ($image === false) {
       $this->get_from_source($sci_name);
       $image = $this->get_image_from_db($sci_name);
     }
     return $image;
+  }
+
+  public function get_cached_image($sci_name)
+  {
+    return $this->get_image_from_db($sci_name);
   }
 
   public function is_reset()
@@ -290,6 +323,19 @@ class ImageProvider
       if ($this->db === null) {
         $db = new SQLite3($this->db_path, SQLITE3_OPEN_READWRITE);
         $this->db = $db;
+
+        // Verifica se la colonna base64_data esiste, altrimenti aggiungila (migrazione)
+        $result = $this->db->query("PRAGMA table_info(images)");
+        $hasBase64 = false;
+        while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+          if ($row['name'] === 'base64_data') {
+            $hasBase64 = true;
+            break;
+          }
+        }
+        if (!$hasBase64) {
+          $this->db->exec("ALTER TABLE images ADD COLUMN base64_data TEXT");
+        }
       }
     }
     catch (Exception $ex) {
@@ -300,7 +346,7 @@ class ImageProvider
 
   protected function create_tables()
   {
-    $tbl_def = "CREATE TABLE images (sci_name VARCHAR(63) NOT NULL PRIMARY KEY, com_en_name VARCHAR(63) NOT NULL, image_url TEXT NOT NULL, title TEXT NOT NULL, id TEXT NOT NULL UNIQUE, author_url TEXT NOT NULL, license_url TEXT NOT NULL, date_created DATE)";
+    $tbl_def = "CREATE TABLE images (sci_name VARCHAR(63) NOT NULL PRIMARY KEY, com_en_name VARCHAR(63) NOT NULL, image_url TEXT NOT NULL, title TEXT NOT NULL, id TEXT NOT NULL UNIQUE, author_url TEXT NOT NULL, license_url TEXT NOT NULL, date_created DATE, base64_data TEXT)";
     $db = new SQLite3($this->db_path);
     $db->exec($tbl_def);
     $db->exec('CREATE TABLE source (ID INTEGER PRIMARY KEY, email VARCHAR(63), uid VARCHAR(63), date_created DATE)');
@@ -317,16 +363,16 @@ class ImageProvider
 
   protected function get_image_from_db($sci_name)
   {
-    $statement0 = $this->db->prepare('SELECT sci_name, com_en_name, image_url, title, id, author_url, license_url, date_created FROM images WHERE sci_name == :sci_name');
+    $statement0 = $this->db->prepare('SELECT sci_name, com_en_name, image_url, title, id, author_url, license_url, date_created, base64_data FROM images WHERE sci_name == :sci_name');
     $statement0->bindValue(':sci_name', $sci_name);
     $result = $statement0->execute();
     $row = $result->fetchArray(SQLITE3_ASSOC);
     return $row;
   }
 
-  protected function set_image_in_db($sci_name, $com_en_name, $image_url, $title, $id, $author_url, $license_url)
+  protected function set_image_in_db($sci_name, $com_en_name, $image_url, $title, $id, $author_url, $license_url, $base64_data = null)
   {
-    $statement0 = $this->db->prepare("INSERT OR REPLACE INTO images VALUES (:sci_name, :com_en_name, :image_url, :title, :id, :author_url, :license_url, DATE(\"now\"))");
+    $statement0 = $this->db->prepare("INSERT OR REPLACE INTO images VALUES (:sci_name, :com_en_name, :image_url, :title, :id, :author_url, :license_url, DATE(\"now\"), :base64_data)");
     $statement0->bindValue(':sci_name', $sci_name);
     $statement0->bindValue(':com_en_name', $com_en_name);
     $statement0->bindValue(':image_url', $image_url);
@@ -334,7 +380,49 @@ class ImageProvider
     $statement0->bindValue(':id', $id);
     $statement0->bindValue(':author_url', $author_url);
     $statement0->bindValue(':license_url', $license_url);
+    $statement0->bindValue(':base64_data', $base64_data);
     $statement0->execute();
+  }
+
+  protected function get_base64_image($url)
+  {
+    if (empty($url))
+      return null;
+    try {
+      $content = @file_get_contents($url, false, $this->context);
+
+      // Se il download fallisce o il contenuto è vuoto, ritorna null
+      if ($content === false || empty($content)) {
+        return null;
+      }
+
+      $mime = "image/jpeg"; // Default fallback
+      if (function_exists('finfo_open')) {
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $mime = finfo_buffer($finfo, $content);
+        finfo_close($finfo);
+      }
+      elseif (function_exists('getimagesizefromstring')) {
+        $size = getimagesizefromstring($content);
+        if ($size && isset($size['mime'])) {
+          $mime = $size['mime'];
+        }
+      }
+
+      // Validazione CRITICA: Se il MIME è html o xml, abbiamo catturato una pagina di errore (es: 429)
+      if (strpos($mime, 'text/html') !== false || strpos($mime, 'application/xml') !== false) {
+        return null;
+      }
+
+      // Assicuriamoci che sia effettivamente un'immagine
+      if (strpos($mime, 'image/') === 0) {
+        return 'data:' . $mime . ';base64,' . base64_encode($content);
+      }
+    }
+    catch (\Throwable $e) {
+    // Ignora errori di download o encoding, ritorni null per fallback su URL
+    }
+    return null;
   }
 }
 
@@ -352,7 +440,7 @@ class Flickr extends ImageProvider
 
   public function __construct()
   {
-    $this->set_db();
+    parent::__construct();
 
     $blacklisted = get_home() . "/BirdNET-Pi/scripts/blacklisted_images.txt";
     if (file_exists($blacklisted)) {
@@ -408,7 +496,9 @@ class Flickr extends ImageProvider
   {
     $engname = get_com_en_name($sci_name);
 
-    $flickrjson = json_decode(file_get_contents("https://www.flickr.com/services/rest/?method=flickr.photos.search&api_key=" . $this->flickr_api_key . "&text=" . str_replace(" ", "%20", $engname) . $this->comnameprefix . "&sort=relevance" . $this->args . "&per_page=5&media=photos&format=json&nojsoncallback=1"), true)["photos"]["photo"];
+    $flickr_url = "https://www.flickr.com/services/rest/?method=flickr.photos.search&api_key=" . $this->flickr_api_key . "&text=" . str_replace(" ", "%20", $engname) . $this->comnameprefix . "&sort=relevance" . $this->args . "&per_page=5&media=photos&format=json&nojsoncallback=1";
+    $flickr_data = $this->get_json($flickr_url);
+    $flickrjson = isset($flickr_data["photos"]["photo"]) ? $flickr_data["photos"]["photo"] : [];
     // could be null!!
     // Find the first photo that is not blacklisted or is not the specific blacklisted id
     $photo = null;
@@ -429,7 +519,10 @@ class Flickr extends ImageProvider
     $authorlink = "https://flickr.com/people/" . $photo["owner"];
     $imageurl = 'https://farm' . $photo["farm"] . '.static.flickr.com/' . $photo["server"] . '/' . $photo["id"] . '_' . $photo["secret"] . '.jpg';
 
-    $this->set_image_in_db($sci_name, $engname, $imageurl, $photo["title"], $photo["id"], $authorlink, $license_url);
+    // Scarica e codifica l'immagine in Base64 per la cache locale
+    $base64_data = $this->get_base64_image($imageurl);
+
+    $this->set_image_in_db($sci_name, $engname, $imageurl, $photo["title"], $photo["id"], $authorlink, $license_url, $base64_data);
   }
 
   private function get_license_url($id)
@@ -494,7 +587,7 @@ class Wikipedia extends ImageProvider
 
     foreach ($metadata['query']['pages'] as $page) {
       $details = $page['imageinfo']['0']['extmetadata'];
-      $author = $details['Artist']['value'];
+      $author = isset($details['Artist']) ? $details['Artist']['value'] : 'Wikipedia User';
       $matches = [];
       if (preg_match('/href="(http\S*)"/', $author, $matches)) {
         $author_url = $matches[1];
@@ -502,21 +595,38 @@ class Wikipedia extends ImageProvider
       else {
         $author_url = $this->get_external_link($image_url);
       }
-      if (isset($details['LicenseUrl'])) {
-        $license_url = $details['LicenseUrl']['value'];
-      }
-      else {
-        $license_url = $this->get_external_link($image_url);
-      }
-      if ($page["imageinfo"][0]["width"] > 1024) {
-        $image_url = preg_replace('#/commons/#', '/commons/thumb/', $image_url) . '/1024px-' . $image_name;
+      $license_url = isset($details['LicenseUrl']) ? $details['LicenseUrl']['value'] : $this->get_external_link($image_url);
+
+      // Costruzione URL thumbnail più robusta se l'immagine è troppo grande
+      if (isset($page["imageinfo"][0]["width"]) && $page["imageinfo"][0]["width"] > 1024) {
+        if (strpos($image_url, '/commons/') !== false) {
+          $image_url = str_replace('/commons/', '/commons/thumb/', $image_url) . '/1024px-' . $image_name;
+        }
+        elseif (preg_match('#/wikipedia/(\w+)/#', $image_url, $m)) {
+          $image_url = str_replace("/wikipedia/{$m[1]}/", "/wikipedia/{$m[1]}/thumb/", $image_url) . '/1024px-' . $image_name;
+        }
       }
     }
 
     $engname = get_com_en_name($sci_name);
 
-    //                     $sci_name, $com_en_name, $image_url, $title, $id, $author_url, $license_url
-    $this->set_image_in_db($sci_name, $engname, $image_url, $title, $sci_name, $author_url, $license_url);
+    // Usa la thumbnail della REST API come fallback primario per il download (spesso 320px)
+    // Se abbiamo costruito una 1024px sopra, proviamo quella, altrimenti summary thumb, altrimenti original.
+    $fetch_url = $image_url;
+    if (isset($data['thumbnail']) && strpos($image_url, '1024px-') === false) {
+      $fetch_url = $data['thumbnail']['source'];
+    }
+
+    // Scarica e codifica l'immagine in Base64 per la cache locale
+    $base64_data = $this->get_base64_image($fetch_url);
+
+    // Se il download del thumb costruito/assegnato fallisce, prova l'originale come ultima spiaggia
+    if (empty($base64_data) && $fetch_url !== $data['originalimage']['source']) {
+      $base64_data = $this->get_base64_image($data['originalimage']['source']);
+    }
+
+    //                     $sci_name, $com_en_name, $image_url, $title, $id, $author_url, $license_url, $base64_data
+    $this->set_image_in_db($sci_name, $engname, $image_url, $title, $sci_name, $author_url, $license_url, $base64_data);
   }
 
   public function get_image($sci_name)
@@ -548,11 +658,11 @@ function get_info_url($sciname)
   $engname = get_com_en_name($sciname);
   $config = get_config();
   if ($config['INFO_SITE'] === 'EBIRD') {
-    require 'scripts/ebird.php';
-    $ebird = $ebirds[$sciname];
+    require_once __DIR__ . '/ebird.php';
+    $ebird = isset($ebirds[$sciname]) ? $ebirds[$sciname] : '';
     $language = $config['DATABASE_LANG'];
     $url = "https://ebird.org/species/$ebird?siteLanguage=$language";
-    $url_title = "eBirds";
+    $url_title = "eBird";
   }
   else {
     $engname_url = str_replace("'", '', str_replace(' ', '_', $engname));
