@@ -91,6 +91,9 @@ try {
         case 'species':
             handle_species($method, $id, $action);
             break;
+        case 'speciesbyperiod':
+            handle_species_by_period($method);
+            break;
         case 'recordings':
             handle_recordings($method, $id, $action);
             break;
@@ -405,6 +408,89 @@ function handle_species($method, $id, $action)
     ]);
 }
 
+//  SPECIES BY PERIOD
+function handle_species_by_period($method)
+{
+    if ($method !== 'GET') {
+        json_error('Metodo non supportato', 405);
+    }
+
+    $db = get_db();
+
+    $from_date = $_GET['from_date'] ?? null;
+    $to_date = $_GET['to_date'] ?? null;
+    $from_time = $_GET['from_time'] ?? null;
+    $to_time = $_GET['to_time'] ?? null;
+    $sort = $_GET['sort'] ?? 'occurrences';
+
+    $where = [];
+    $params = [];
+
+    if ($from_date) {
+        $where[] = "Date >= :from_date";
+        $params[':from_date'] = $from_date;
+    }
+    if ($to_date) {
+        $where[] = "Date <= :to_date";
+        $params[':to_date'] = $to_date;
+    }
+    if ($from_time) {
+        $where[] = "Time >= :from_time";
+        $params[':from_time'] = $from_time;
+    }
+    if ($to_time) {
+        $where[] = "Time <= :to_time";
+        $params[':to_time'] = $to_time;
+    }
+
+    $whereStr = count($where) > 0 ? "WHERE " . implode(' AND ', $where) : "";
+
+    $sortMap = [
+        'occurrences' => 'Count DESC',
+        'confidence' => 'MaxConfidence DESC',
+        'date' => 'MAX(Date) DESC, MAX(Time) DESC',
+        'name' => 'Com_Name ASC',
+    ];
+    $orderBy = $sortMap[$sort] ?? 'Count DESC';
+
+    $sql = "SELECT Com_Name, Sci_Name, COUNT(*) as Count, MAX(Confidence) as MaxConfidence, 
+                   MAX(Date) as Date, MAX(Time) as Time, File_Name
+            FROM detections 
+            $whereStr 
+            GROUP BY Sci_Name 
+            ORDER BY $orderBy";
+
+    $stmt = $db->prepare($sql);
+    foreach ($params as $k => $v) {
+        $stmt->bindValue($k, $v);
+    }
+    ensure_db_ok($stmt);
+    $result = $stmt->execute();
+
+    $species = [];
+    while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+        $species[] = [
+            'Com_Name' => $row['Com_Name'],
+            'Sci_Name' => $row['Sci_Name'],
+            'Count' => (int)$row['Count'],
+            'MaxConfidence' => floatval($row['MaxConfidence']),
+            'Date' => $row['Date'],
+            'Time' => $row['Time'],
+            'File_Name' => $row['File_Name'],
+        ];
+    }
+
+    json_success([
+        'species' => $species,
+        'total' => count($species),
+        'sort' => $sort,
+        'from_date' => $from_date,
+        'to_date' => $to_date,
+        'from_time' => $from_time,
+        'to_time' => $to_time,
+    ]);
+}
+
 //  RECORDINGS
 function handle_recordings($method, $id, $action)
 {
@@ -415,6 +501,10 @@ function handle_recordings($method, $id, $action)
     switch ($method) {
         case 'GET':
             $date = $_GET['date'] ?? null;
+            $from_date = $_GET['from_date'] ?? null;
+            $to_date = $_GET['to_date'] ?? null;
+            $from_time = $_GET['from_time'] ?? null;
+            $to_time = $_GET['to_time'] ?? null;
             $species = $_GET['species'] ?? null;
             $sort = $_GET['sort'] ?? 'date';
             $limit = intval($_GET['limit'] ?? 200);
@@ -422,14 +512,25 @@ function handle_recordings($method, $id, $action)
             $where = [];
             $params = [];
 
-            if ($date) {
+            if ($from_date && $to_date) {
+                $where[] = "Date BETWEEN :from_date AND :to_date";
+                $params[':from_date'] = $from_date;
+                $params[':to_date'] = $to_date;
+            }
+            elseif ($date) {
                 $where[] = "Date = :date";
                 $params[':date'] = $date;
             }
             elseif (!$species) {
-                // If neither date nor species is provided, default to today
+                // If neither range nor single date nor species is provided, default to today
                 $where[] = "Date = :date";
                 $params[':date'] = date('Y-m-d');
+            }
+
+            if ($from_time && $to_time) {
+                $where[] = "Time BETWEEN :from_time AND :to_time";
+                $params[':from_time'] = $from_time;
+                $params[':to_time'] = $to_time;
             }
 
             if ($species) {
