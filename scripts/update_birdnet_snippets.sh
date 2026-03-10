@@ -265,7 +265,7 @@ if [ -L $HOME/BirdNET-Pi/model/labels.txt ]; then
   sudo_with_user install_language_label.sh
 fi
 
-sqlite3 $HOME/BirdNET-Pi/scripts/birds.db << EOF
+sudo_with_user sqlite3 $HOME/BirdNET-Pi/scripts/birds.db << EOF
 CREATE INDEX IF NOT EXISTS "detections_Com_Name" ON "detections" ("Com_Name");
 CREATE INDEX IF NOT EXISTS "detections_Sci_Name" ON "detections" ("Sci_Name");
 CREATE INDEX IF NOT EXISTS "detections_Sciname_Date" ON "detections" ("Sci_Name", "Date");
