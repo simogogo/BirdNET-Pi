@@ -444,11 +444,19 @@ function handle_species_by_period($method)
         $where[] = "Date <= :to_date";
         $params[':to_date'] = $to_date;
     }
-    if ($from_time) {
+    if ($from_time && $to_time) {
+        // Cross-midnight check: if from_time > to_time the range spans midnight
+        if ($from_time > $to_time) {
+            $where[] = "(Time >= :from_time OR Time <= :to_time)";
+        } else {
+            $where[] = "(Time >= :from_time AND Time <= :to_time)";
+        }
+        $params[':from_time'] = $from_time;
+        $params[':to_time']   = $to_time;
+    } elseif ($from_time) {
         $where[] = "Time >= :from_time";
         $params[':from_time'] = $from_time;
-    }
-    if ($to_time) {
+    } elseif ($to_time) {
         $where[] = "Time <= :to_time";
         $params[':to_time'] = $to_time;
     }
@@ -538,9 +546,14 @@ function handle_recordings($method, $id, $action)
             }
 
             if ($from_time && $to_time) {
-                $where[] = "Time BETWEEN :from_time AND :to_time";
+                // Cross-midnight check: if from_time > to_time the range spans midnight
+                if ($from_time > $to_time) {
+                    $where[] = "(Time >= :from_time OR Time <= :to_time)";
+                } else {
+                    $where[] = "(Time BETWEEN :from_time AND :to_time)";
+                }
                 $params[':from_time'] = $from_time;
-                $params[':to_time'] = $to_time;
+                $params[':to_time']   = $to_time;
             }
 
             if ($species) {
