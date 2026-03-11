@@ -820,31 +820,40 @@ function handle_charts($type)
     json_error('Tipo grafico non valido. Usa: daily, dates', 400);
 }
 
-//  WEEKLY REPORT
+//  WEEKLY / MONTHLY REPORT
 function handle_report($type)
 {
-    if ($type !== 'weekly')
+    if ($type !== 'weekly' && $type !== 'monthly')
         json_error('Tipo report non valido', 400);
 
     $db = get_db();
     $targetDate = $_GET['date'] ?? date('Y-m-d');
 
-    // date('N') restituisce 1 per Lunedi' e 7 per Domenica.
-    // Sottraendo (date('N') - 1) giorni, troviamo esattamente il Lunedi' della settimana in corso.
-    $daysToSubtract = date('N', strtotime($targetDate)) - 1;
-    $thisWeekStart = date('Y-m-d', strtotime("-{$daysToSubtract} days", strtotime($targetDate)));
-    $thisWeekEnd = date('Y-m-d', strtotime("+6 days", strtotime($thisWeekStart)));
+    if ($type === 'weekly') {
+        // date('N') restituisce 1 per Lunedi' e 7 per Domenica.
+        // Sottraendo (date('N') - 1) giorni, troviamo esattamente il Lunedi' della settimana in corso.
+        $daysToSubtract = date('N', strtotime($targetDate)) - 1;
+        $thisPeriodStart = date('Y-m-d', strtotime("-{$daysToSubtract} days", strtotime($targetDate)));
+        $thisPeriodEnd = date('Y-m-d', strtotime("+6 days", strtotime($thisPeriodStart)));
 
-    // La settimana precedente inizia 7 giorni prima di $thisWeekStart
-    $lastWeekStart = date('Y-m-d', strtotime("-7 days", strtotime($thisWeekStart)));
+        // La settimana precedente inizia 7 giorni prima di $thisPeriodStart
+        $lastPeriodStart = date('Y-m-d', strtotime("-7 days", strtotime($thisPeriodStart)));
+    } else {
+        // month logic
+        $thisPeriodStart = date('Y-m-01', strtotime($targetDate));
+        $thisPeriodEnd = date('Y-m-t', strtotime($targetDate));
+        
+        // previous month
+        $lastPeriodStart = date('Y-m-01', strtotime("-1 month", strtotime($thisPeriodStart)));
+    }
 
-    // This week
+    // This week / month
     $stmt = $db->prepare("SELECT Com_Name, Sci_Name, COUNT(*) as count, MAX(Confidence) as max_conf
                           FROM detections 
                           WHERE Date >= :start AND Date <= :end
                           GROUP BY Sci_Name ORDER BY count DESC");
-    $stmt->bindValue(':start', $thisWeekStart);
-    $stmt->bindValue(':end', $thisWeekEnd);
+    $stmt->bindValue(':start', $thisPeriodStart);
+    $stmt->bindValue(':end', $thisPeriodEnd);
     ensure_db_ok($stmt);
     $thisWeek = [];
     $r = $stmt->execute();
@@ -856,13 +865,13 @@ function handle_report($type)
         $thisWeek[] = $row;
     }
 
-    // Last week
+    // Last week / month
     $stmt2 = $db->prepare("SELECT Com_Name, Sci_Name, COUNT(*) as count
                            FROM detections 
                            WHERE Date >= :start AND Date < :end
                            GROUP BY Sci_Name ORDER BY count DESC");
-    $stmt2->bindValue(':start', $lastWeekStart);
-    $stmt2->bindValue(':end', $thisWeekStart);
+    $stmt2->bindValue(':start', $lastPeriodStart);
+    $stmt2->bindValue(':end', $thisPeriodStart);
     ensure_db_ok($stmt2);
     $lastWeek = [];
     $r2 = $stmt2->execute();
@@ -891,8 +900,8 @@ function handle_report($type)
         : null;
 
     json_success([
-        'period_start' => $thisWeekStart,
-        'period_end' => $thisWeekEnd,
+        'period_start' => $thisPeriodStart,
+        'period_end' => $thisPeriodEnd,
         'total_detections' => $totalThisWeek,
         'total_previous' => $totalLastWeek,
         'total_percent_change' => $totalPctChange,
