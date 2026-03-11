@@ -903,13 +903,15 @@ function handle_report($type)
         ? round((($totalThisWeek - $totalLastWeek) / $totalLastWeek) * 100, 1)
         : null;
 
+    $heatmapLimit = ($type === 'daily') ? 999999 : 30;
+
     // Heatmap Matrix: Counts per species per hour (only for the top species in this period)
     $speciesHourlyCounts = [];
     if (count($speciesWithChange) > 0) {
         $topNames = [];
         $i = 0;
         foreach ($speciesWithChange as $sp) {
-            if ($i >= 15) break; // Limit heatmap to top 15 species to avoid massive payloads
+            if ($i >= $heatmapLimit) break; // Limit heatmap
             $topNames[] = "'" . SQLite3::escapeString($sp['Sci_Name']) . "'";
             $i++;
         }
@@ -926,7 +928,7 @@ function handle_report($type)
 
         // Initialize empty map for each top species
         foreach ($speciesWithChange as $index => $sp) {
-            if ($index >= 15) break;
+            if ($index >= $heatmapLimit) break;
             $speciesHourlyCounts[$sp['Sci_Name']] = [
                 'Com_Name' => $sp['Com_Name'],
                 'Sci_Name' => $sp['Sci_Name'],
