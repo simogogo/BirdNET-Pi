@@ -903,7 +903,7 @@ function handle_report($type)
         ? round((($totalThisWeek - $totalLastWeek) / $totalLastWeek) * 100, 1)
         : null;
 
-    $heatmapLimit = ($type === 'daily') ? 999999 : 30;
+    $heatmapLimit = 999999;
 
     // Heatmap Matrix: Counts per species per hour (only for the top species in this period)
     $speciesHourlyCounts = [];
@@ -933,7 +933,9 @@ function handle_report($type)
                 'Com_Name' => $sp['Com_Name'],
                 'Sci_Name' => $sp['Sci_Name'],
                 'hours' => array_fill(0, 24, 0),
-                'total' => $sp['count']
+                'total' => $sp['count'],
+                'is_new' => $sp['is_new'],
+                'percent_change' => $sp['percent_change']
             ];
         }
 
