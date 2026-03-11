@@ -820,16 +820,20 @@ function handle_charts($type)
     json_error('Tipo grafico non valido. Usa: daily, dates', 400);
 }
 
-//  WEEKLY / MONTHLY REPORT
+//  DAILY / WEEKLY / MONTHLY REPORT
 function handle_report($type)
 {
-    if ($type !== 'weekly' && $type !== 'monthly')
+    if ($type !== 'daily' && $type !== 'weekly' && $type !== 'monthly')
         json_error('Tipo report non valido', 400);
 
     $db = get_db();
     $targetDate = $_GET['date'] ?? date('Y-m-d');
 
-    if ($type === 'weekly') {
+    if ($type === 'daily') {
+        $thisPeriodStart = $targetDate;
+        $thisPeriodEnd = $targetDate;
+        $lastPeriodStart = date('Y-m-d', strtotime("-1 day", strtotime($targetDate)));
+    } elseif ($type === 'weekly') {
         // date('N') restituisce 1 per Lunedi' e 7 per Domenica.
         // Sottraendo (date('N') - 1) giorni, troviamo esattamente il Lunedi' della settimana in corso.
         $daysToSubtract = date('N', strtotime($targetDate)) - 1;
@@ -847,7 +851,7 @@ function handle_report($type)
         $lastPeriodStart = date('Y-m-01', strtotime("-1 month", strtotime($thisPeriodStart)));
     }
 
-    // This week / month
+    // This period
     $stmt = $db->prepare("SELECT Com_Name, Sci_Name, COUNT(*) as count, MAX(Confidence) as max_conf
                           FROM detections 
                           WHERE Date >= :start AND Date <= :end
@@ -899,6 +903,48 @@ function handle_report($type)
         ? round((($totalThisWeek - $totalLastWeek) / $totalLastWeek) * 100, 1)
         : null;
 
+    // Heatmap Matrix: Counts per species per hour (only for the top species in this period)
+    $speciesHourlyCounts = [];
+    if (count($speciesWithChange) > 0) {
+        $topNames = [];
+        $i = 0;
+        foreach ($speciesWithChange as $sp) {
+            if ($i >= 15) break; // Limit heatmap to top 15 species to avoid massive payloads
+            $topNames[] = "'" . SQLite3::escapeString($sp['Sci_Name']) . "'";
+            $i++;
+        }
+        $inClause = implode(',', $topNames);
+        
+        $stmt3 = $db->prepare("SELECT Sci_Name, Com_Name, SUBSTR(Time, 1, 2) as hour, COUNT(*) as count 
+                               FROM detections 
+                               WHERE Date >= :start AND Date <= :end AND Sci_Name IN ($inClause)
+                               GROUP BY Sci_Name, hour 
+                               ORDER BY Sci_Name, hour");
+        $stmt3->bindValue(':start', $thisPeriodStart);
+        $stmt3->bindValue(':end', $thisPeriodEnd);
+        $r3 = $stmt3->execute();
+
+        // Initialize empty map for each top species
+        foreach ($speciesWithChange as $index => $sp) {
+            if ($index >= 15) break;
+            $speciesHourlyCounts[$sp['Sci_Name']] = [
+                'Com_Name' => $sp['Com_Name'],
+                'Sci_Name' => $sp['Sci_Name'],
+                'hours' => array_fill(0, 24, 0),
+                'total' => $sp['count']
+            ];
+        }
+
+        // Fill with real data
+        while ($row = $r3->fetchArray(SQLITE3_ASSOC)) {
+            $h = (int)$row['hour'];
+            $sciName = $row['Sci_Name'];
+            if (isset($speciesHourlyCounts[$sciName])) {
+                $speciesHourlyCounts[$sciName]['hours'][$h] = (int)$row['count'];
+            }
+        }
+    }
+
     json_success([
         'period_start' => $thisPeriodStart,
         'period_end' => $thisPeriodEnd,
@@ -909,6 +955,7 @@ function handle_report($type)
         'unique_species_previous' => count($lastWeek),
         'new_species' => $newSpecies,
         'species' => $speciesWithChange,
+        'species_hourly_counts' => array_values($speciesHourlyCounts),
     ]);
 }
 
