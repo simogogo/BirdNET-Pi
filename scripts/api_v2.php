@@ -1248,14 +1248,33 @@ function handle_config($method)
             if (in_array($key, ['MODEL', 'DATABASE_LANG']))
                 $update_language = true;
 
-            // Save to config file
-            $pattern = "/^\s*#?\s*" . preg_quote($key) . "\s*=.*$/m";
+            // Normalizzazione separatore decimale per campi numerici
+            if (in_array($key, ['SF_THRESH', 'LATITUDE', 'LONGITUDE', 'RARE_SPECIES_THRESHOLD', 'PURGE_THRESHOLD'])) {
+                $value = str_replace(',', '.', $value);
+                // Evitiamo che SF_THRESH diventi vuoto (config.php lo resetterebbe a 0.03)
+                if ($key === 'SF_THRESH' && (trim($value) === "" || !is_numeric($value))) {
+                    $value = "0.03";
+                }
+            }
+
+            // Determiniamo se il valore deve essere racchiuso tra virgolette.
+            // Seguiamo la logica di config.php + sicurezza per spazi.
+            $should_quote = in_array($key, [
+                'SITE_NAME', 'APPRISE_NOTIFICATION_TITLE', 'APPRISE_NOTIFICATION_BODY', 
+                'APPRISE_ONLY_NOTIFY_SPECIES_NAMES', 'APPRISE_ONLY_NOTIFY_SPECIES_NAMES_2',
+                'CUSTOM_IMAGE_TITLE', 'BIRDNETPI_URL', 'APPRISE'
+            ]) || (strpos($value, ' ') !== false);
+
+            // Salvataggio nel file di configurazione con regex robusta
+            $pattern = "/^\s*#?\s*" . preg_quote($key) . "\s*=\s*.*$/m";
+            $safeValue = addcslashes($value, '$\\');
+            $replacement = $should_quote ? "$key=\"$safeValue\"" : "$key=$safeValue";
+
             if (preg_match($pattern, $content)) {
-                $safeValue = addcslashes($value, '$\\');
-                $content = preg_replace($pattern, "$key=\"$safeValue\"", $content);
+                $content = preg_replace($pattern, $replacement, $content);
             }
             else {
-                $content .= "\n$key=\"$value\"";
+                $content .= "\n$replacement";
             }
             $updated[] = $key;
         }
