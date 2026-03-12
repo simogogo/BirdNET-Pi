@@ -111,7 +111,7 @@ try {
             handle_serve_media($mediaPath);
             break;
         case 'config':
-            handle_config($method);
+            handle_config($method, $id);
             break;
         case 'recordinglength':
             handle_recording_length($method);
@@ -1132,9 +1132,24 @@ function handle_database_lang()
 }
 
 //  CONFIG 
-function handle_config($method)
+function handle_config($method, $id = null)
 {
     if ($method === 'GET') {
+        if ($id === 'species-tester') {
+            require_auth();
+            $threshold = $_GET['threshold'] ?? null;
+            if ($threshold === null || !is_numeric($threshold) || $threshold < 0 || $threshold > 1) {
+                json_error('Invalid threshold value', 400);
+            }
+
+            $user = get_user();
+            $home = get_home();
+            $command = "sudo -u $user " . $home . "/BirdNET-Pi/birdnet/bin/python3 " . $home . "/BirdNET-Pi/scripts/species.py --threshold $threshold 2>&1";
+            $output = shell_exec($command);
+
+            json_success(['output' => $output]);
+        }
+
         require_auth();
         $config = get_config();
 
@@ -1214,7 +1229,7 @@ function handle_config($method)
 
         $configPath = '/etc/birdnet/birdnet.conf';
         if (!file_exists($configPath) || !is_writable($configPath)) {
-            json_error('File di configurazione non accessibile', 500);
+            json_error('File di configurazione non accessibile o non scrivibile', 500);
         }
 
         $content = file_get_contents($configPath);
@@ -1231,9 +1246,28 @@ function handle_config($method)
             if (!in_array($key, $allowed))
                 continue;
 
+            // Normalizzazione separatore decimale per campi numerici e prevenzione notazione scientifica
+            if (in_array($key, ['SF_THRESH', 'LATITUDE', 'LONGITUDE', 'RARE_SPECIES_THRESHOLD', 'PURGE_THRESHOLD'])) {
+                $value = str_replace(',', '.', (string)$value);
+                if (is_numeric($value)) {
+                    // Forziamo un formato decimale standard per evitare scientific notation in birdnet.conf
+                    $value = sprintf("%.6f", (float)$value);
+                    // Rimuoviamo gli zeri superflui ma manteniamo almeno un decimale se necessario o il punto
+                    $value = rtrim(rtrim($value, '0'), '.');
+                    if ($value === "" || $value === "0") $value = "0.0";
+                }
+                if ($key === 'SF_THRESH' && (trim($value) === "" || !is_numeric($value))) {
+                    $value = "0.03";
+                }
+            }
+
             $oldValue = $old_config[$key] ?? null;
-            if ((string)$oldValue === (string)$value)
-                continue;
+            // Se il valore è numericamente uguale ma il formato è diverso (es. quotes), procediamo comunque
+            // Forza l'aggiornamento se il valore nel file è racchiuso tra virgolette ma non dovrebbe
+            $is_currently_quoted = preg_match("/^\s*#?\s*" . preg_quote($key) . "\s*=\s*\"/mi", $content);
+            
+            if ((string)$oldValue === (string)$value && !$is_currently_quoted)
+                 continue;
 
             if ($key === 'BIRDNETPI_URL') {
                 $value = rtrim($value, '/');
@@ -1248,25 +1282,15 @@ function handle_config($method)
             if (in_array($key, ['MODEL', 'DATABASE_LANG']))
                 $update_language = true;
 
-            // Normalizzazione separatore decimale per campi numerici
-            if (in_array($key, ['SF_THRESH', 'LATITUDE', 'LONGITUDE', 'RARE_SPECIES_THRESHOLD', 'PURGE_THRESHOLD'])) {
-                $value = str_replace(',', '.', $value);
-                // Evitiamo che SF_THRESH diventi vuoto (config.php lo resetterebbe a 0.03)
-                if ($key === 'SF_THRESH' && (trim($value) === "" || !is_numeric($value))) {
-                    $value = "0.03";
-                }
-            }
-
             // Determiniamo se il valore deve essere racchiuso tra virgolette.
-            // Seguiamo la logica di config.php + sicurezza per spazi.
             $should_quote = in_array($key, [
                 'SITE_NAME', 'APPRISE_NOTIFICATION_TITLE', 'APPRISE_NOTIFICATION_BODY', 
                 'APPRISE_ONLY_NOTIFY_SPECIES_NAMES', 'APPRISE_ONLY_NOTIFY_SPECIES_NAMES_2',
                 'CUSTOM_IMAGE_TITLE', 'BIRDNETPI_URL', 'APPRISE'
-            ]) || (strpos($value, ' ') !== false);
+            ]) || (strpos((string)$value, ' ') !== false);
 
-            // Salvataggio nel file di configurazione con regex robusta
-            $pattern = "/^\s*#?\s*" . preg_quote($key) . "\s*=\s*.*$/m";
+            // Salvataggio nel file di configurazione con regex robusta (case-insensitive per il key)
+            $pattern = "/^\s*#?\s*" . preg_quote($key) . "\s*=\s*.*$/mi";
             $safeValue = addcslashes($value, '$\\');
             $replacement = $should_quote ? "$key=\"$safeValue\"" : "$key=$safeValue";
 
@@ -1280,13 +1304,15 @@ function handle_config($method)
         }
 
         if (!empty($updated)) {
-            file_put_contents($configPath, $content);
-
+            if (file_put_contents($configPath, $content) === false) {
+                json_error('Errore durante la scrittura di birdnet.conf', 500);
+            }
+            
             if (function_exists('get_config')) {
                 get_config(true); // Force config reload
             }
 
-            // Execute service restarts asynchronously to avoid blocking API
+            // Execute service restarts
             $user = get_user();
             $home = get_home();
 
