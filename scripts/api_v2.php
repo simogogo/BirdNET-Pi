@@ -607,36 +607,64 @@ function handle_recordings($method, $id, $action)
             if (!$id)
                 json_error('Nome file richiesto', 400);
             $fileName = urldecode($id);
+            $sciName = $_GET['sci_name'] ?? null;
+            $date = $_GET['date'] ?? null;
+            $time = $_GET['time'] ?? null;
 
-            // Find the file in the database
-            $stmt = $db->prepare("SELECT Date, Com_Name, File_Name FROM detections WHERE File_Name = :fn LIMIT 1");
+            if (!$sciName || !$date || !$time) {
+                json_error('Parametri sci_name, date e time richiesti per la cancellazione sicura', 400);
+            }
+
+            // Find the specific detection in the database
+            $stmt = $db->prepare("SELECT Date, Com_Name, File_Name FROM detections WHERE File_Name = :fn AND Sci_Name = :sn AND Date = :d AND Time = :t LIMIT 1");
             $stmt->bindValue(':fn', $fileName);
+            $stmt->bindValue(':sn', $sciName);
+            $stmt->bindValue(':d', $date);
+            $stmt->bindValue(':t', $time);
             $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
 
             if (!$row)
-                json_error('File non trovato nel database', 404);
+                json_error('Detection non trovata nel database', 404);
 
             $comName = str_replace([' ', "'"], ['_', ''], $row['Com_Name']);
             $fileRelativePath = "{$row['Date']}/{$comName}/{$fileName}";
             $filePath = rtrim($home, '/') . "/BirdSongs/Extracted/By_Date/" . $fileRelativePath;
 
-            $output = [];
-            $cmd = "sudo rm " . escapeshellarg($filePath) . " 2>&1 && sudo rm " . escapeshellarg($filePath . ".png") . " 2>&1";
-            if (!exec($cmd, $output)) {
-                $dbRw = get_db_rw();
-                $delStmt = $dbRw->prepare("DELETE FROM detections WHERE File_Name = :fn LIMIT 1");
-                $delStmt->bindValue(':fn', $fileName);
-                $result1 = $delStmt->execute();
+            // Delete the database record first
+            $dbRw = get_db_rw();
+            $delStmt = $dbRw->prepare("DELETE FROM detections WHERE File_Name = :fn AND Sci_Name = :sn AND Date = :d AND Time = :t");
+            $delStmt->bindValue(':fn', $fileName);
+            $delStmt->bindValue(':sn', $sciName);
+            $delStmt->bindValue(':d', $date);
+            $delStmt->bindValue(':t', $time);
+            $result = $delStmt->execute();
 
-                if ($result1 === false || $dbRw->changes() === 0) {
-                    json_error('Error - database line deletion failed : ' . $dbRw->lastErrorMsg(), 500);
+            if ($result === false || $dbRw->changes() === 0) {
+                json_error('Error - database line deletion failed : ' . $dbRw->lastErrorMsg(), 500);
+            }
+
+            // Check if other detections still reference the same file
+            $checkStmt = $db->prepare("SELECT COUNT(*) as count FROM detections WHERE File_Name = :fn");
+            $checkStmt->bindValue(':fn', $fileName);
+            $checkCount = $checkStmt->execute()->fetchArray(SQLITE3_ASSOC)['count'];
+
+            $fileDeleted = false;
+            if ($checkCount == 0) {
+                // No more references, safe to delete the physical file
+                $output = [];
+                $cmd = "sudo rm " . escapeshellarg($filePath) . " 2>&1 && sudo rm " . escapeshellarg($filePath . ".png") . " 2>&1";
+                if (exec($cmd, $output)) {
+                    // exec returns the last line of output if successful in some contexts, 
+                    // but usually we check return value. In PHP exec return is last line.
                 }
+                $fileDeleted = true;
+            }
 
-                json_success(['deleted' => true, 'db_rows_affected' => $dbRw->changes()]);
-            }
-            else {
-                json_error('Error - file deletion failed : ' . implode(", ", $output), 500);
-            }
+            json_success([
+                'deleted' => true, 
+                'db_rows_affected' => $dbRw->changes(),
+                'file_removed_from_disk' => $fileDeleted
+            ]);
             break;
 
         case 'PUT':
@@ -1117,6 +1145,7 @@ function handle_config($method)
             'EXTRACTION_LENGTH' => '6', 'IMAGE_PROVIDER' => 'WIKIPEDIA', 'INFO_SITE' => 'ALLABOUTBIRDS',
             'APPRISE_NOTIFICATION_TITLE' => '', 'APPRISE_NOTIFICATION_BODY' => '', 'APPRISE_NOTIFY_NEW_SPECIES' => '0',
             'APPRISE_NOTIFY_NEW_SPECIES_EACH_DAY' => '0', 'APPRISE_WEEKLY_REPORT' => '0', 'COLOR_SCHEME' => 'light',
+            'APPRISE' => '',
 
             // Basic Additions
             'APPRISE_NOTIFY_EACH_DETECTION' => '0', 'FLICKR_API_KEY' => '', 'FLICKR_FILTER_EMAIL' => '',
@@ -1166,6 +1195,7 @@ function handle_config($method)
             'EXTRACTION_LENGTH', 'IMAGE_PROVIDER', 'INFO_SITE',
             'APPRISE_NOTIFICATION_TITLE', 'APPRISE_NOTIFICATION_BODY', 'APPRISE_NOTIFY_NEW_SPECIES',
             'APPRISE_NOTIFY_NEW_SPECIES_EACH_DAY', 'APPRISE_WEEKLY_REPORT', 'COLOR_SCHEME',
+            'APPRISE',
 
             'APPRISE_NOTIFY_EACH_DETECTION', 'FLICKR_API_KEY', 'FLICKR_FILTER_EMAIL',
             'APPRISE_MINIMUM_SECONDS_BETWEEN_NOTIFICATIONS_PER_SPECIES', 'SF_THRESH',
@@ -1221,7 +1251,8 @@ function handle_config($method)
             // Save to config file
             $pattern = "/^" . preg_quote($key) . "=.*$/m";
             if (preg_match($pattern, $content)) {
-                $content = preg_replace($pattern, "$key=\"$value\"", $content);
+                $safeValue = addcslashes($value, '$\\');
+                $content = preg_replace($pattern, "$key=\"$safeValue\"", $content);
             }
             else {
                 $content .= "\n$key=\"$value\"";
