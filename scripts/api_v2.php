@@ -1232,7 +1232,7 @@ function handle_config($method)
                 continue;
 
             $oldValue = $old_config[$key] ?? null;
-            if ($oldValue === $value)
+            if ((string)$oldValue === (string)$value)
                 continue;
 
             if ($key === 'BIRDNETPI_URL') {
@@ -1249,7 +1249,7 @@ function handle_config($method)
                 $update_language = true;
 
             // Save to config file
-            $pattern = "/^" . preg_quote($key) . "=.*$/m";
+            $pattern = "/^\s*#?\s*" . preg_quote($key) . "\s*=.*$/m";
             if (preg_match($pattern, $content)) {
                 $safeValue = addcslashes($value, '$\\');
                 $content = preg_replace($pattern, "$key=\"$safeValue\"", $content);
