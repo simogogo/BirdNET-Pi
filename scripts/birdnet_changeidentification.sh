@@ -13,15 +13,14 @@ HOME="${HOME:-/home/pi}"
 source /etc/birdnet/birdnet.conf &>/dev/null
 
 # Get arguments
-OLDNAME="$1" #OLDNAME="Mésange_charbonnière-78-2024-05-02-birdnet-RTSP_1-18:14:08.mp3"
-NEWNAME="$2" #NEWNAME="Lapinus atricapilla_Lapinu à tête noire"
+OLDNAME="$1"
+NEWNAME="$2"
+OUTPUT_TYPE="${3:-debug}"
 
-# Set log level
-OUTPUT_TYPE="${3:-debug}" # Set 3rd argument to debug to have all outputs
-
-# Ask for user input if no arguments
-if [ -z "$OLDNAME" ]; then read -r -p 'OLDNAME (finishing by file extension): ' OLDNAME; fi
-if [ -z "$NEWNAME" ]; then read -r -p 'NEWNAME (sciname_commoname): ' NEWNAME; fi
+# New parameter arguments for scoped identifier locking
+OLD_SCI_NAME="$4"
+DATE="$5"
+TIME="$6"
 
 # Fixed values
 LABELS_FILE="$HOME/BirdNET-Pi/model/labels.txt"
@@ -68,10 +67,16 @@ fi
 [[ "$OUTPUT_TYPE" == "debug" ]] && echo "Starting to modify $OLDNAME to $NEWNAME"
 
 # Get the line where the column "File_Name" matches exactly $OLDNAME
-IFS='|' read -r OLDNAME_sciname OLDNAME_comname OLDNAME_date < <(sqlite3 "$DB_FILE" "SELECT Sci_Name, Com_Name, Date FROM $DETECTIONS_TABLE WHERE File_Name = '$OLDNAME' LIMIT 1;")
+SQL_QUERY="SELECT Sci_Name, Com_Name, Date FROM $DETECTIONS_TABLE WHERE File_Name = '$OLDNAME'"
+if [ -n "$OLD_SCI_NAME" ]; then SQL_QUERY="$SQL_QUERY AND Sci_Name = '$OLD_SCI_NAME'"; fi
+if [ -n "$DATE" ]; then SQL_QUERY="$SQL_QUERY AND Date = '$DATE'"; fi
+if [ -n "$TIME" ]; then SQL_QUERY="$SQL_QUERY AND Time = '$TIME'"; fi
+SQL_QUERY="$SQL_QUERY LIMIT 1;"
+
+IFS='|' read -r OLDNAME_sciname OLDNAME_comname OLDNAME_date < <(sqlite3 "$DB_FILE" "$SQL_QUERY")
 
 if [[ -z "$OLDNAME_sciname" ]]; then
-    echo "Error: No line matching $OLDNAME in $DB_FILE"
+    echo "Error: No line matching $OLDNAME (and provided filters) in $DB_FILE"
     exit 1
 fi
 
@@ -92,18 +97,28 @@ NEWNAME_filename="${OLDNAME//$OLDNAME_comname_safe/$NEWNAME_comname_safe}"
 # EXECUTE : MOVE FILES #
 ########################
 
-# Check if the file exists
+# Check if more rows share the same file name
+COUNT=$(sqlite3 "$DB_FILE" "SELECT COUNT(*) FROM $DETECTIONS_TABLE WHERE File_Name = '$OLDNAME';")
+[[ "$OUTPUT_TYPE" == "debug" ]] && echo "Shared rows count for $OLDNAME: $COUNT"
+
 FILE_PATH="$HOME/BirdSongs/Extracted/By_Date/$OLDNAME_date/$OLDNAME_comname_safe/$OLDNAME"
+
 if [[ -f $FILE_PATH ]]; then
     # Ensure the new directory exists
     NEW_DIR="$HOME/BirdSongs/Extracted/By_Date/$OLDNAME_date/$NEWNAME_comname_safe"
     mkdir -p "$NEW_DIR"
     
-    # Move and rename the file
-    mv "$FILE_PATH" "$NEW_DIR/$NEWNAME_filename"
-    mv "$FILE_PATH".png "$NEW_DIR/$NEWNAME_filename".png
-    
-    [[ "$OUTPUT_TYPE" == "debug" ]] && echo "Files moved!"
+    if [ "$COUNT" -gt 1 ]; then
+        # Copy file if others share references
+        cp "$FILE_PATH" "$NEW_DIR/$NEWNAME_filename"
+        cp "$FILE_PATH".png "$NEW_DIR/$NEWNAME_filename".png
+        [[ "$OUTPUT_TYPE" == "debug" ]] && echo "Files COPIED (multiple detections share file)!"
+    else
+        # Move file if it's uniquely owned
+        mv "$FILE_PATH" "$NEW_DIR/$NEWNAME_filename"
+        mv "$FILE_PATH".png "$NEW_DIR/$NEWNAME_filename".png
+        [[ "$OUTPUT_TYPE" == "debug" ]] && echo "Files MOVED (unique ownership)!"
+    fi
 else
     echo "Error: File $FILE_PATH does not exist"
 fi
@@ -112,8 +127,14 @@ fi
 # EXECUTE : UPDATE DATABASE FILES #
 ###################################
 
-# Update the database
-sqlite3 "$DB_FILE" "UPDATE $DETECTIONS_TABLE SET Sci_Name = '$NEWNAME_sciname', Com_Name = '$NEWNAME_comname', Confidence = '0', File_Name = '$NEWNAME_filename' WHERE File_Name = '$OLDNAME';"
+# Update the database scoped row
+SQL_UPDATE="UPDATE $DETECTIONS_TABLE SET Sci_Name = '$NEWNAME_sciname', Com_Name = '$NEWNAME_comname', Confidence = '0', File_Name = '$NEWNAME_filename' WHERE File_Name = '$OLDNAME'"
+if [ -n "$OLD_SCI_NAME" ]; then SQL_UPDATE="$SQL_UPDATE AND Sci_Name = '$OLD_SCI_NAME'"; fi
+if [ -n "$DATE" ]; then SQL_UPDATE="$SQL_UPDATE AND Date = '$DATE'"; fi
+if [ -n "$TIME" ]; then SQL_UPDATE="$SQL_UPDATE AND Time = '$TIME'"; fi
+SQL_UPDATE="$SQL_UPDATE;"
+
+sqlite3 "$DB_FILE" "$SQL_UPDATE"
 
 [[ "$OUTPUT_TYPE" == "debug" ]] && echo "Database entry removed"
 

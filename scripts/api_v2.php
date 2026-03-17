@@ -681,9 +681,13 @@ function handle_recordings($method, $id, $action)
                 if (empty($newName))
                     json_error('new_name richiesto', 400);
 
+                $sciName = $_GET['sci_name'] ?? '';
+                $date = $_GET['date'] ?? '';
+                $time = $_GET['time'] ?? '';
+
                 $output = [];
                 // Execute backend script just like play.php
-                $cmd = "sudo -u " . escapeshellarg($user) . " " . escapeshellarg($home . "/BirdNET-Pi/scripts/birdnet_changeidentification.sh") . " " . escapeshellarg($fileName) . " " . escapeshellarg($newName) . " log_errors 2>&1";
+                $cmd = "sudo -u " . escapeshellarg($user) . " " . escapeshellarg($home . "/BirdNET-Pi/scripts/birdnet_changeidentification.sh") . " " . escapeshellarg($fileName) . " " . escapeshellarg($newName) . " log_errors " . escapeshellarg($sciName) . " " . escapeshellarg($date) . " " . escapeshellarg($time) . " 2>&1";
                 if (!exec($cmd, $output)) {
                     json_success(['updated' => true, 'new_name' => $newName]);
                 }
