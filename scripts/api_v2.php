@@ -2073,10 +2073,6 @@ function handle_logs()
         'cursor' => $newCursor
     ]);
 }
-
-/**
- * Insights - Environmental Correlation
- */
 function handle_insights($method, $id)
 {
     if ($method !== 'GET') {
@@ -2280,8 +2276,10 @@ function handle_insights($method, $id)
             ];
         }
         $desc = $row['description'];
-        $sp_cond_data[$sci]['conditions'][$desc] = (int)$row['count'];
-        $sp_cond_data[$sci]['total'] += (int)$row['count'];
+        if (isset($sp_cond_data[$sci]['conditions'][$desc])) {
+            $sp_cond_data[$sci]['conditions'][$desc] = (int)$row['count'];
+            $sp_cond_data[$sci]['total'] += (int)$row['count'];
+        }
     }
 
     // 7. Wind Sensitivity
@@ -2309,6 +2307,63 @@ function handle_insights($method, $id)
         $wind_sens_data[$sci][$row['wind_type']] = (int)$row['count'];
     }
 
+    // 8. Day vs Night Condition Correlation (Radar Chart)
+    $sql_day_night = "SELECT 
+                        w.IsDay,
+                        CASE 
+                            WHEN w.ConditionCode = 0 THEN 'Clear'
+                            WHEN w.ConditionCode BETWEEN 1 AND 3 THEN 'Cloudy'
+                            WHEN w.ConditionCode IN (45, 48) THEN 'Fog'
+                            WHEN w.ConditionCode BETWEEN 51 AND 67 OR w.ConditionCode BETWEEN 80 AND 82 THEN 'Rain'
+                            WHEN w.ConditionCode BETWEEN 71 AND 77 OR w.ConditionCode IN (85, 86) THEN 'Snow'
+                            WHEN w.ConditionCode BETWEEN 95 AND 99 THEN 'Thunderstorm'
+                            ELSE 'Cloudy' 
+                        END as description,
+                        COUNT(*) as count
+                     FROM detections d
+                     JOIN weather w ON d.Date = w.Date AND CAST(SUBSTR(d.Time, 1, 2) AS INT) = w.Hour
+                     WHERE $where_clause
+                     GROUP BY w.IsDay, description";
+    $res_day_night = $db->query($sql_day_night);
+    $day_night_data = [
+        'day' => ['Clear' => 0, 'Cloudy' => 0, 'Fog' => 0, 'Rain' => 0, 'Snow' => 0, 'Thunderstorm' => 0],
+        'night' => ['Clear' => 0, 'Cloudy' => 0, 'Fog' => 0, 'Rain' => 0, 'Snow' => 0, 'Thunderstorm' => 0]
+    ];
+    while ($row = $res_day_night->fetchArray(SQLITE3_ASSOC)) {
+        $type = ($row['IsDay'] == 1) ? 'day' : 'night';
+        $desc = $row['description'];
+        if (isset($day_night_data[$type][$desc])) {
+            $day_night_data[$type][$desc] = (int)$row['count'];
+        }
+    }
+
+    // 9. Golden Window (Temp vs Wind Matrix)
+    $sql_golden = "SELECT 
+                        CASE 
+                            WHEN ((w.Temp - 32) * 5.0 / 9.0) < 10 THEN '< 10°C'
+                            WHEN ((w.Temp - 32) * 5.0 / 9.0) <= 18 THEN '10-18°C'
+                            WHEN ((w.Temp - 32) * 5.0 / 9.0) <= 25 THEN '18-25°C'
+                            ELSE '> 25°C'
+                        END as temp_bracket,
+                        CASE 
+                            WHEN w.WindSpeed <= 5 THEN 'Calm (0-5)'
+                            WHEN w.WindSpeed <= 15 THEN 'Breezy (6-15)'
+                            ELSE 'Windy (> 15)'
+                        END as wind_bracket,
+                        COUNT(*) as count
+                     FROM detections d
+                     JOIN weather w ON d.Date = w.Date AND CAST(SUBSTR(d.Time, 1, 2) AS INT) = w.Hour
+                     WHERE $where_clause AND w.Temp IS NOT NULL AND w.WindSpeed IS NOT NULL
+                     GROUP BY temp_bracket, wind_bracket";
+    $res_golden = $db->query($sql_golden);
+    $golden_data = [];
+    while ($row = $res_golden->fetchArray(SQLITE3_ASSOC)) {
+        $golden_data[] = [
+            'temp' => $row['temp_bracket'],
+            'wind' => $row['wind_bracket'],
+            'count' => (int)$row['count']
+        ];
+    }
 
     json_success([
         'has_weather' => true,
@@ -2318,10 +2373,10 @@ function handle_insights($method, $id)
         'wind_impact' => array_values($unified_wind), 
         'species_ideal' => $species_ideal,
         'temp_vs_detections' => $temp_vs_detections,
-        'species_condition_correlation' => array_values($sp_cond_data), // <--- Injection
-        'wind_sensitivity' => array_values($wind_sens_data) // <--- Injection
+        'species_condition_correlation' => array_values($sp_cond_data),
+        'wind_sensitivity' => array_values($wind_sens_data),
+        'day_night_condition' => $day_night_data,
+        'golden_window' => $golden_data
     ]);
 
 }
-
-
