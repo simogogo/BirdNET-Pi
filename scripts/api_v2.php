@@ -2091,11 +2091,15 @@ function handle_insights($method, $id)
     $period = $_GET['period'] ?? '30d'; // Default to 30d for trends
     
     $where_clause = "1=1";
+    $where_clause_sub = "1=1"; // Per evitare collisioni in subquery
     if ($period === '7d') {
         $where_clause = "d.Date >= DATE('now', '-7 days', 'localtime')";
+        $where_clause_sub = "Date >= DATE('now', '-7 days', 'localtime')";
     } elseif ($period === '30d') {
         $where_clause = "d.Date >= DATE('now', '-30 days', 'localtime')";
+        $where_clause_sub = "Date >= DATE('now', '-30 days', 'localtime')";
     }
+
 
     // Check if weather table has data
     $check = $db->querySingle("SELECT COUNT(*) FROM weather");
@@ -2257,7 +2261,7 @@ function handle_insights($method, $id)
                         COUNT(*) as count
                      FROM detections d
                      JOIN weather w ON d.Date = w.Date AND CAST(SUBSTR(d.Time, 1, 2) AS INT) = w.Hour
-                     WHERE d.Sci_Name IN (SELECT Sci_Name FROM detections d WHERE $where_clause GROUP BY Sci_Name ORDER BY COUNT(*) DESC LIMIT 5)
+                     WHERE d.Sci_Name IN (SELECT Sci_Name FROM detections WHERE $where_clause_sub GROUP BY Sci_Name ORDER BY COUNT(*) DESC LIMIT 5)
                        AND $where_clause
                      GROUP BY d.Sci_Name, description";
     $res_sp_cond = $db->query($sql_sp_cond);
@@ -2287,7 +2291,7 @@ function handle_insights($method, $id)
                         COUNT(*) as count
                      FROM detections d
                      JOIN weather w ON d.Date = w.Date AND CAST(SUBSTR(d.Time, 1, 2) AS INT) = w.Hour
-                     WHERE d.Sci_Name IN (SELECT d_sub.Sci_Name FROM detections d_sub WHERE $where_clause GROUP BY d_sub.Sci_Name ORDER BY COUNT(*) DESC LIMIT 5)
+                     WHERE d.Sci_Name IN (SELECT Sci_Name FROM detections WHERE $where_clause_sub GROUP BY Sci_Name ORDER BY COUNT(*) DESC LIMIT 5)
                        AND $where_clause AND w.WindSpeed IS NOT NULL
                      GROUP BY d.Sci_Name, wind_type";
     $res_wind_sens = $db->query($sql_wind_sens);
@@ -2304,6 +2308,7 @@ function handle_insights($method, $id)
         }
         $wind_sens_data[$sci][$row['wind_type']] = (int)$row['count'];
     }
+
 
     json_success([
         'has_weather' => true,
