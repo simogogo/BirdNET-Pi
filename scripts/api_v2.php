@@ -843,12 +843,23 @@ function handle_charts($type)
         while ($wrow = $res_w->fetchArray(SQLITE3_ASSOC)) {
             $h = (int)$wrow['Hour'];
             $tempC = isset($wrow['Temp']) && $wrow['Temp'] !== '' ? round(($wrow['Temp'] - 32) * 5 / 9, 1) : null;
+            
+            $code = (int)($wrow['ConditionCode'] ?? 0);
+            $condDesc = 'Cloudy';
+            if ($code === 0) $condDesc = 'Clear';
+            else if ($code >= 1 && $code <= 3) $condDesc = 'Cloudy';
+            else if ($code == 45 || $code == 48) $condDesc = 'Fog';
+            else if (($code >= 51 && $code <= 67) || ($code >= 80 && $code <= 82)) $condDesc = 'Rain';
+            else if (($code >= 71 && $code <= 77) || $code == 85 || $code == 86) $condDesc = 'Snow';
+            else if ($code >= 95 && $code <= 99) $condDesc = 'Thunderstorm';
+
             $hourlyWeather[$h] = [
                 'temp' => $tempC,
                 'wind' => $wrow['WindSpeed'] ?? null,
-                'condition' => $wrow['ConditionCode'] ?? 'Clear'
+                'condition' => $condDesc
             ];
         }
+
         // --------------------------------
 
         // Chart images (if they exist)
@@ -1025,12 +1036,23 @@ function handle_report($type)
         while ($wrow = $res_w->fetchArray(SQLITE3_ASSOC)) {
             $h = (int)$wrow['Hour'];
             $tempC = isset($wrow['Temp']) && $wrow['Temp'] !== '' ? round(($wrow['Temp'] - 32) * 5 / 9, 1) : null;
+            
+            $code = (int)($wrow['ConditionCode'] ?? 0);
+            $condDesc = 'Cloudy';
+            if ($code === 0) $condDesc = 'Clear';
+            else if ($code >= 1 && $code <= 3) $condDesc = 'Cloudy';
+            else if ($code == 45 || $code == 48) $condDesc = 'Fog';
+            else if (($code >= 51 && $code <= 67) || ($code >= 80 && $code <= 82)) $condDesc = 'Rain';
+            else if (($code >= 71 && $code <= 77) || $code == 85 || $code == 86) $condDesc = 'Snow';
+            else if ($code >= 95 && $code <= 99) $condDesc = 'Thunderstorm';
+
             $hourlyWeather[$h] = [
                 'temp' => $tempC,
                 'wind' => $wrow['WindSpeed'] ?? null,
-                'condition' => $wrow['ConditionCode'] ?? 'Clear'
+                'condition' => $condDesc
             ];
         }
+
     }
     // --------------------------------
 
