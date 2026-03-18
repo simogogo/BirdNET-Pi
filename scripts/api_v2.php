@@ -2242,15 +2242,81 @@ function handle_insights($method, $id)
         ]; 
     }
 
+    // 6. Species vs Condition Correlation
+    $sql_sp_cond = "SELECT 
+                        d.Sci_Name, d.Com_Name,
+                        CASE 
+                            WHEN w.ConditionCode = 0 THEN 'Clear'
+                            WHEN w.ConditionCode BETWEEN 1 AND 3 THEN 'Cloudy'
+                            WHEN w.ConditionCode IN (45, 48) THEN 'Fog'
+                            WHEN w.ConditionCode BETWEEN 51 AND 67 OR w.ConditionCode BETWEEN 80 AND 82 THEN 'Rain'
+                            WHEN w.ConditionCode BETWEEN 71 AND 77 OR w.ConditionCode IN (85, 86) THEN 'Snow'
+                            WHEN w.ConditionCode BETWEEN 95 AND 99 THEN 'Thunderstorm'
+                            ELSE 'Cloudy' 
+                        END as description,
+                        COUNT(*) as count
+                     FROM detections d
+                     JOIN weather w ON d.Date = w.Date AND CAST(SUBSTR(d.Time, 1, 2) AS INT) = w.Hour
+                     WHERE d.Sci_Name IN (SELECT Sci_Name FROM detections d WHERE $where_clause GROUP BY Sci_Name ORDER BY COUNT(*) DESC LIMIT 5)
+                       AND $where_clause
+                     GROUP BY d.Sci_Name, description";
+    $res_sp_cond = $db->query($sql_sp_cond);
+    $sp_cond_data = [];
+    while ($row = $res_sp_cond->fetchArray(SQLITE3_ASSOC)) {
+        $sci = $row['Sci_Name'];
+        if (!isset($sp_cond_data[$sci])) {
+            $sp_cond_data[$sci] = [
+                'Sci_Name' => $sci,
+                'Com_Name' => $row['Com_Name'],
+                'conditions' => [
+                    'Clear' => 0, 'Cloudy' => 0, 'Fog' => 0, 
+                    'Rain' => 0, 'Snow' => 0, 'Thunderstorm' => 0
+                ],
+                'total' => 0
+            ];
+        }
+        $desc = $row['description'];
+        $sp_cond_data[$sci]['conditions'][$desc] = (int)$row['count'];
+        $sp_cond_data[$sci]['total'] += (int)$row['count'];
+    }
+
+    // 7. Wind Sensitivity
+    $sql_wind_sens = "SELECT 
+                        d.Sci_Name, d.Com_Name,
+                        CASE WHEN w.WindSpeed <= 10 THEN 'Calm' ELSE 'Windy' END as wind_type,
+                        COUNT(*) as count
+                     FROM detections d
+                     JOIN weather w ON d.Date = w.Date AND CAST(SUBSTR(d.Time, 1, 2) AS INT) = w.Hour
+                     WHERE d.Sci_Name IN (SELECT d_sub.Sci_Name FROM detections d_sub WHERE $where_clause GROUP BY d_sub.Sci_Name ORDER BY COUNT(*) DESC LIMIT 5)
+                       AND $where_clause AND w.WindSpeed IS NOT NULL
+                     GROUP BY d.Sci_Name, wind_type";
+    $res_wind_sens = $db->query($sql_wind_sens);
+    $wind_sens_data = [];
+    while ($row = $res_wind_sens->fetchArray(SQLITE3_ASSOC)) {
+        $sci = $row['Sci_Name'];
+        if (!isset($wind_sens_data[$sci])) {
+            $wind_sens_data[$sci] = [
+                'Sci_Name' => $sci,
+                'Com_Name' => $row['Com_Name'],
+                'Calm' => 0,
+                'Windy' => 0
+            ];
+        }
+        $wind_sens_data[$sci][$row['wind_type']] = (int)$row['count'];
+    }
+
     json_success([
         'has_weather' => true,
         'period' => $period,
         'temp_brackets' => $temp_brackets,
         'condition_impact' => array_values($master_conditions),
-        'wind_impact' => array_values($unified_wind), // Convert to array for easier Dart mapping
+        'wind_impact' => array_values($unified_wind), 
         'species_ideal' => $species_ideal,
-        'temp_vs_detections' => $temp_vs_detections
+        'temp_vs_detections' => $temp_vs_detections,
+        'species_condition_correlation' => array_values($sp_cond_data), // <--- Injection
+        'wind_sensitivity' => array_values($wind_sens_data) // <--- Injection
     ]);
+
 }
 
 
