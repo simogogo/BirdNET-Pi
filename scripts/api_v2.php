@@ -2136,13 +2136,14 @@ function handle_insights($method, $id)
 
     // 2. Condition Impact (WMO Groupings)
     $master_conditions = [
-        'Clear' => ['emoji' => '☀️', 'det_count' => 0, 'species_count' => 0],
-        'Cloudy' => ['emoji' => '☁️', 'det_count' => 0, 'species_count' => 0],
-        'Fog' => ['emoji' => '🌫️', 'det_count' => 0, 'species_count' => 0],
-        'Rain' => ['emoji' => '🌧️', 'det_count' => 0, 'species_count' => 0],
-        'Snow' => ['emoji' => '❄️', 'det_count' => 0, 'species_count' => 0],
-        'Thunderstorm' => ['emoji' => '⛈️', 'det_count' => 0, 'species_count' => 0]
+        'Clear' => ['description' => 'Clear', 'emoji' => '☀️', 'det_count' => 0, 'species_count' => 0],
+        'Cloudy' => ['description' => 'Cloudy', 'emoji' => '☁️', 'det_count' => 0, 'species_count' => 0],
+        'Fog' => ['description' => 'Fog', 'emoji' => '🌫️', 'det_count' => 0, 'species_count' => 0],
+        'Rain' => ['description' => 'Rain', 'emoji' => '🌧️', 'det_count' => 0, 'species_count' => 0],
+        'Snow' => ['description' => 'Snow', 'emoji' => '❄️', 'det_count' => 0, 'species_count' => 0],
+        'Thunderstorm' => ['description' => 'Thunderstorm', 'emoji' => '⛈️', 'det_count' => 0, 'species_count' => 0]
     ];
+
 
     $sql_cond = "SELECT 
         CASE 
@@ -2171,11 +2172,12 @@ function handle_insights($method, $id)
 
     // 3. Wind Impact (Wind Speed brackets)
     $unified_wind = [
-        'Calm (0-5)' => ['emoji' => '🍃', 'det_count' => 0, 'species_count' => 0],
-        'Breezy (6-15)' => ['emoji' => '🌬️', 'det_count' => 0, 'species_count' => 0],
-        'Windy (16-25)' => ['emoji' => '💨', 'det_count' => 0, 'species_count' => 0],
-        'Very Windy (26+)' => ['emoji' => '🌪️', 'det_count' => 0, 'species_count' => 0]
+        'Calm (0-5)' => ['bracket' => 'Calm (0-5)', 'emoji' => '🍃', 'det_count' => 0, 'species_count' => 0],
+        'Breezy (6-15)' => ['bracket' => 'Breezy (6-15)', 'emoji' => '🌬️', 'det_count' => 0, 'species_count' => 0],
+        'Windy (16-25)' => ['bracket' => 'Windy (16-25)', 'emoji' => '💨', 'det_count' => 0, 'species_count' => 0],
+        'Very Windy (26+)' => ['bracket' => 'Very Windy (26+)', 'emoji' => '🌪️', 'det_count' => 0, 'species_count' => 0]
     ];
+
 
     $sql_wind = "SELECT 
         CASE 
