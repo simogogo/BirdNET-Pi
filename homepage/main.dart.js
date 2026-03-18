@@ -66511,7 +66511,7 @@ o=this.b
 if(!(o<18))s=B.f.ah(a,2)!==0&&o<26
 else s=!0
 if(s)return A.at(p,p,o)
-return A.at(A.bC(A.oB("assets/images/weather/"+q.toLowerCase()+".png",new A.aRC(),B.k5,28,28),p,p),p,o)},
+return A.at(A.bC(A.oB("assets/images/weather/"+q.toLowerCase()+".png",new A.aRC(),B.k5,50,50),p,p),p,o)},
 $S:119}
 A.aRC.prototype={
 $3(a,b,c){return B.aa},
