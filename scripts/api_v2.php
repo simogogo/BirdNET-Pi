@@ -2086,15 +2086,25 @@ function handle_insights($method, $id)
     $db = get_db(); 
     $period = $_GET['period'] ?? '30d'; // Default to 30d for trends
     
+    $start_date = $_GET['start_date'] ?? null;
+    $end_date = $_GET['end_date'] ?? null;
+
     $where_clause = "1=1";
     $where_clause_sub = "1=1"; // Per evitare collisioni in subquery
-    if ($period === '7d') {
-        $where_clause = "d.Date >= DATE('now', '-7 days', 'localtime')";
-        $where_clause_sub = "Date >= DATE('now', '-7 days', 'localtime')";
-    } elseif ($period === '30d') {
-        $where_clause = "d.Date >= DATE('now', '-30 days', 'localtime')";
-        $where_clause_sub = "Date >= DATE('now', '-30 days', 'localtime')";
+
+    if ($start_date && $end_date && preg_match('/^\d{4}-\d{2}-\d{2}$/', $start_date) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $end_date)) {
+        $where_clause = "d.Date BETWEEN '$start_date' AND '$end_date'";
+        $where_clause_sub = "Date BETWEEN '$start_date' AND '$end_date'";
+    } else {
+        if ($period === '7d') {
+            $where_clause = "d.Date >= DATE('now', '-7 days', 'localtime')";
+            $where_clause_sub = "Date >= DATE('now', '-7 days', 'localtime')";
+        } elseif ($period === '30d') {
+            $where_clause = "d.Date >= DATE('now', '-30 days', 'localtime')";
+            $where_clause_sub = "Date >= DATE('now', '-30 days', 'localtime')";
+        }
     }
+
 
 
     // Check if weather table has data
