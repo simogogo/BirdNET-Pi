@@ -148,7 +148,11 @@ try {
         case 'logs':
             handle_logs();
             break;
+        case 'insights':
+            handle_insights($method, $id);
+            break;
         case 'ping':
+
             json_success(['pong' => true, 'version' => '2.0', 'timestamp' => date('c')]);
             break;
         default:
@@ -2004,3 +2008,91 @@ function handle_logs()
         'cursor' => $newCursor
     ]);
 }
+
+/**
+ * Insights - Environmental Correlation
+ */
+function handle_insights($method, $id)
+{
+    if ($method !== 'GET') {
+        json_error('Metodo non supportato', 405);
+    }
+
+    if ($id !== 'environmental') {
+        json_error('Sottovista non supportata o non implementata', 404);
+    }
+
+    $db = get_db(); 
+    
+    // Check if weather table has data
+    $check = $db->querySingle("SELECT COUNT(*) FROM weather");
+    $has_weather = ($check > 0);
+
+    if (!$has_weather) {
+        json_success([
+            'has_weather' => false,
+            'temp_brackets' => [],
+            'condition_impact' => [],
+            'wind_impact' => []
+        ]);
+    }
+
+    // 1. Temp vs Detections (Fahrenheit brackets of 10 degrees)
+    $sql_temp = "SELECT 
+                    (CAST(w.Temp / 10 AS INT) * 10) as bracket,
+                    COUNT(*) as count
+                 FROM detections d
+                 JOIN weather w ON d.Date = w.Date AND CAST(SUBSTR(d.Time, 1, 2) AS INT) = w.Hour
+                 GROUP BY bracket
+                 ORDER BY bracket ASC";
+    $res_temp = $db->query($sql_temp);
+    $temp_brackets = [];
+    while ($row = $res_temp->fetchArray(SQLITE3_ASSOC)) {
+        $temp_brackets[] = [
+            'bracket' => $row['bracket'] . '-' . ($row['bracket'] + 10),
+            'count' => (int)$row['count']
+        ];
+    }
+
+    // 2. Condition Impact
+    $sql_cond = "SELECT 
+                    w.ConditionCode,
+                    COUNT(*) as count
+                 FROM detections d
+                 JOIN weather w ON d.Date = w.Date AND CAST(SUBSTR(d.Time, 1, 2) AS INT) = w.Hour
+                 GROUP BY w.ConditionCode
+                 ORDER BY count DESC";
+    $res_cond = $db->query($sql_cond);
+    $condition_impact = [];
+    while ($row = $res_cond->fetchArray(SQLITE3_ASSOC)) {
+        $condition_impact[] = [
+            'code' => (int)$row['ConditionCode'],
+            'count' => (int)$row['count']
+        ];
+    }
+
+    // 3. Wind Impact (Wind Speed brackets of 5 mph)
+    $sql_wind = "SELECT 
+                    (CAST(w.WindSpeed / 5 AS INT) * 5) as bracket,
+                    COUNT(*) as count
+                 FROM detections d
+                 JOIN weather w ON d.Date = w.Date AND CAST(SUBSTR(d.Time, 1, 2) AS INT) = w.Hour
+                 GROUP BY bracket
+                 ORDER BY bracket ASC";
+    $res_wind = $db->query($sql_wind);
+    $wind_impact = [];
+    while ($row = $res_wind->fetchArray(SQLITE3_ASSOC)) {
+        $wind_impact[] = [
+            'bracket' => $row['bracket'] . '-' . ($row['bracket'] + 5),
+            'count' => (int)$row['count']
+        ];
+    }
+
+    json_success([
+        'has_weather' => true,
+        'temp_brackets' => $temp_brackets,
+        'condition_impact' => $condition_impact,
+        'wind_impact' => $wind_impact
+    ]);
+}
+

@@ -246,12 +246,14 @@ if [ -L /usr/local/bin/birdnet_analysis.sh ];then
 fi
 
 # Clean state and update cron if all scripts are not installed
-if [ "$(grep -o "#birdnet" /etc/crontab | wc -l)" -lt 6 ]; then
+if [ "$(grep -o "#birdnet" /etc/crontab | wc -l)" -lt 7 ]; then
   sudo sed -i '/birdnet/,+1d' /etc/crontab
   sed "s/\$USER/$USER/g" "$HOME"/BirdNET-Pi/templates/cleanup.cron >> /etc/crontab
   sed "s/\$USER/$USER/g" "$HOME"/BirdNET-Pi/templates/weekly_report.cron >> /etc/crontab
   sed "s/\$USER/$USER/g" "$HOME"/BirdNET-Pi/templates/automatic_update.cron >> /etc/crontab
+  sed "s/\$USER/$USER/g" "$HOME"/BirdNET-Pi/templates/weather.cron >> /etc/crontab
 fi
+
 
 set +x
 AUTH=$(grep basicauth /etc/caddy/Caddyfile)
@@ -273,7 +275,18 @@ CREATE INDEX IF NOT EXISTS "detections_Sciname_Date" ON "detections" ("Sci_Name"
 CREATE INDEX IF NOT EXISTS "detections_Sciname_Date_Confidence" ON "detections" ("Sci_Name", "Date", "Confidence");
 CREATE INDEX IF NOT EXISTS "detections_Date_Time" ON "detections" ("Date" DESC, "Time" DESC);
 
+CREATE TABLE IF NOT EXISTS weather (
+  Date DATE,
+  Hour INT,
+  Temp FLOAT,
+  ConditionCode INT,
+  IsDay INT,
+  WindSpeed FLOAT,
+  WindDirection INT,
+  PRIMARY KEY (Date, Hour)
+);
 EOF
+
 
 # update snippets above
 

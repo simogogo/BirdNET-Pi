@@ -20,6 +20,17 @@ CREATE INDEX "detections_Sci_Name" ON "detections" ("Sci_Name");
 CREATE INDEX "detections_Date_Time" ON "detections" ("Date" DESC, "Time" DESC);
 CREATE INDEX "detections_Sciname_Date" ON "detections" ("Sci_Name", "Date");
 CREATE INDEX "detections_Sciname_Date_Confidence" ON "detections" ("Sci_Name", "Date", "Confidence");
+CREATE TABLE IF NOT EXISTS weather (
+  Date DATE,
+  Hour INT,
+  Temp FLOAT,
+  ConditionCode INT,
+  IsDay INT,
+  WindSpeed FLOAT,
+  WindDirection INT,
+  PRIMARY KEY (Date, Hour)
+);
 EOF
+
 chown $USER:$USER $HOME/BirdNET-Pi/scripts/birds.db
 chmod g+w $HOME/BirdNET-Pi/scripts/birds.db
