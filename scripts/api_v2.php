@@ -834,6 +834,22 @@ function handle_charts($type)
                 }
             }
         }
+        
+        // --- HOURLY WEATHER ADDITION ---
+        $hourlyWeather = array_fill(0, 24, null);
+        $stmt_w = $db->prepare("SELECT Hour, Temp, WindSpeed, ConditionCode FROM weather WHERE Date = :date");
+        $stmt_w->bindValue(':date', $date);
+        $res_w = $stmt_w->execute();
+        while ($wrow = $res_w->fetchArray(SQLITE3_ASSOC)) {
+            $h = (int)$wrow['Hour'];
+            $tempC = isset($wrow['Temp']) && $wrow['Temp'] !== '' ? round(($wrow['Temp'] - 32) * 5 / 9, 1) : null;
+            $hourlyWeather[$h] = [
+                'temp' => $tempC,
+                'wind' => $wrow['WindSpeed'] ?? null,
+                'condition' => $wrow['ConditionCode'] ?? 'Clear'
+            ];
+        }
+        // --------------------------------
 
         // Chart images (if they exist)
         $home = get_home();
@@ -847,10 +863,12 @@ function handle_charts($type)
             'species_by_hour' => $speciesByHour,
             'top_species' => $topSpecies,
             'species_hourly_counts' => array_values($speciesHourlyCounts),
+            'hourly_weather' => $hourlyWeather, // <--- Injection
             'chart1_available' => file_exists($chart1),
             'chart2_available' => file_exists($chart2),
         ]);
     }
+
 
     // Available dates
     if ($type === 'dates') {
@@ -998,8 +1016,27 @@ function handle_report($type)
         }
     }
 
+    // --- HOURLY WEATHER ADDITION ---
+    $hourlyWeather = array_fill(0, 24, null);
+    if ($type === 'daily') {
+        $stmt_w = $db->prepare("SELECT Hour, Temp, WindSpeed, ConditionCode FROM weather WHERE Date = :date");
+        $stmt_w->bindValue(':date', $targetDate);
+        $res_w = $stmt_w->execute();
+        while ($wrow = $res_w->fetchArray(SQLITE3_ASSOC)) {
+            $h = (int)$wrow['Hour'];
+            $tempC = isset($wrow['Temp']) && $wrow['Temp'] !== '' ? round(($wrow['Temp'] - 32) * 5 / 9, 1) : null;
+            $hourlyWeather[$h] = [
+                'temp' => $tempC,
+                'wind' => $wrow['WindSpeed'] ?? null,
+                'condition' => $wrow['ConditionCode'] ?? 'Clear'
+            ];
+        }
+    }
+    // --------------------------------
+
     json_success([
         'period_start' => $thisPeriodStart,
+
         'period_end' => $thisPeriodEnd,
         'total_detections' => $totalThisWeek,
         'total_previous' => $totalLastWeek,
@@ -1009,6 +1046,7 @@ function handle_report($type)
         'new_species' => $newSpecies,
         'species' => $speciesWithChange,
         'species_hourly_counts' => array_values($speciesHourlyCounts),
+        'hourly_weather' => $hourlyWeather, // <--- Injection
     ]);
 }
 
