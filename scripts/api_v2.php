@@ -834,6 +834,34 @@ function handle_charts($type)
                 }
             }
         }
+        
+        // --- HOURLY WEATHER ADDITION ---
+        $hourlyWeather = array_fill(0, 24, null);
+        $stmt_w = $db->prepare("SELECT Hour, Temp, WindSpeed, WindDirection, ConditionCode FROM weather WHERE Date = :date");
+        $stmt_w->bindValue(':date', $date);
+        $res_w = $stmt_w->execute();
+        while ($wrow = $res_w->fetchArray(SQLITE3_ASSOC)) {
+            $h = (int)$wrow['Hour'];
+            $tempC = isset($wrow['Temp']) && $wrow['Temp'] !== '' ? round(($wrow['Temp'] - 32) * 5 / 9, 1) : null;
+            
+            $code = (int)($wrow['ConditionCode'] ?? 0);
+            $condDesc = 'Cloudy';
+            if ($code === 0) $condDesc = 'Clear';
+            else if ($code >= 1 && $code <= 3) $condDesc = 'Cloudy';
+            else if ($code == 45 || $code == 48) $condDesc = 'Fog';
+            else if (($code >= 51 && $code <= 67) || ($code >= 80 && $code <= 82)) $condDesc = 'Rain';
+            else if (($code >= 71 && $code <= 77) || $code == 85 || $code == 86) $condDesc = 'Snow';
+            else if ($code >= 95 && $code <= 99) $condDesc = 'Thunderstorm';
+
+            $hourlyWeather[$h] = [
+                'temp' => $tempC,
+                'wind' => $wrow['WindSpeed'] ?? null,
+                'wind_deg' => $wrow['WindDirection'] ?? null,
+                'condition' => $condDesc
+            ];
+        }
+
+        // --------------------------------
 
         // Chart images (if they exist)
         $home = get_home();
@@ -847,10 +875,12 @@ function handle_charts($type)
             'species_by_hour' => $speciesByHour,
             'top_species' => $topSpecies,
             'species_hourly_counts' => array_values($speciesHourlyCounts),
+            'hourly_weather' => $hourlyWeather, // <--- Injection
             'chart1_available' => file_exists($chart1),
             'chart2_available' => file_exists($chart2),
         ]);
     }
+
 
     // Available dates
     if ($type === 'dates') {
@@ -998,8 +1028,42 @@ function handle_report($type)
         }
     }
 
+    // --- HOURLY WEATHER ADDITION ---
+    $hourlyWeather = null;
+    if ($type === 'daily') {
+        $hourlyWeather = array_fill(0, 24, null);
+
+        $stmt_w = $db->prepare("SELECT Hour, Temp, WindSpeed, WindDirection, ConditionCode FROM weather WHERE Date = :date");
+        $stmt_w->bindValue(':date', $targetDate);
+        $res_w = $stmt_w->execute();
+        while ($wrow = $res_w->fetchArray(SQLITE3_ASSOC)) {
+            $h = (int)$wrow['Hour'];
+            $tempC = isset($wrow['Temp']) && $wrow['Temp'] !== '' ? round(($wrow['Temp'] - 32) * 5 / 9, 1) : null;
+            
+            $code = (int)($wrow['ConditionCode'] ?? 0);
+            $condDesc = 'Cloudy';
+            if ($code === 0) $condDesc = 'Clear';
+            else if ($code >= 1 && $code <= 3) $condDesc = 'Cloudy';
+            else if ($code == 45 || $code == 48) $condDesc = 'Fog';
+            else if (($code >= 51 && $code <= 67) || ($code >= 80 && $code <= 82)) $condDesc = 'Rain';
+            else if (($code >= 71 && $code <= 77) || $code == 85 || $code == 86) $condDesc = 'Snow';
+            else if ($code >= 95 && $code <= 99) $condDesc = 'Thunderstorm';
+
+            $hourlyWeather[$h] = [
+                'temp' => $tempC,
+                'wind' => $wrow['WindSpeed'] ?? null,
+                'wind_deg' => $wrow['WindDirection'] ?? null, // <--- Injection
+                'condition' => $condDesc
+            ];
+        }
+
+
+    }
+    // --------------------------------
+
     json_success([
         'period_start' => $thisPeriodStart,
+
         'period_end' => $thisPeriodEnd,
         'total_detections' => $totalThisWeek,
         'total_previous' => $totalLastWeek,
@@ -1009,6 +1073,7 @@ function handle_report($type)
         'new_species' => $newSpecies,
         'species' => $speciesWithChange,
         'species_hourly_counts' => array_values($speciesHourlyCounts),
+        'hourly_weather' => $hourlyWeather, // <--- Injection
     ]);
 }
 
@@ -2008,10 +2073,6 @@ function handle_logs()
         'cursor' => $newCursor
     ]);
 }
-
-/**
- * Insights - Environmental Correlation
- */
 function handle_insights($method, $id)
 {
     if ($method !== 'GET') {
@@ -2023,7 +2084,29 @@ function handle_insights($method, $id)
     }
 
     $db = get_db(); 
+    $period = $_GET['period'] ?? '30d'; // Default to 30d for trends
     
+    $start_date = $_GET['start_date'] ?? null;
+    $end_date = $_GET['end_date'] ?? null;
+
+    $where_clause = "1=1";
+    $where_clause_sub = "1=1"; // Per evitare collisioni in subquery
+
+    if ($start_date && $end_date && preg_match('/^\d{4}-\d{2}-\d{2}$/', $start_date) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $end_date)) {
+        $where_clause = "d.Date BETWEEN '$start_date' AND '$end_date'";
+        $where_clause_sub = "Date BETWEEN '$start_date' AND '$end_date'";
+    } else {
+        if ($period === '7d') {
+            $where_clause = "d.Date >= DATE('now', '-7 days', 'localtime')";
+            $where_clause_sub = "Date >= DATE('now', '-7 days', 'localtime')";
+        } elseif ($period === '30d') {
+            $where_clause = "d.Date >= DATE('now', '-30 days', 'localtime')";
+            $where_clause_sub = "Date >= DATE('now', '-30 days', 'localtime')";
+        }
+    }
+
+
+
     // Check if weather table has data
     $check = $db->querySingle("SELECT COUNT(*) FROM weather");
     $has_weather = ($check > 0);
@@ -2033,66 +2116,279 @@ function handle_insights($method, $id)
             'has_weather' => false,
             'temp_brackets' => [],
             'condition_impact' => [],
-            'wind_impact' => []
+            'wind_impact' => [],
+            'species_ideal' => [],
+            'temp_vs_detections' => []
         ]);
     }
 
-    // 1. Temp vs Detections (Fahrenheit brackets of 10 degrees)
+    // 1. Temp vs Detections (Celsius brackets of 5 degrees)
+    // Formula: (Temp - 32) * 5/9
     $sql_temp = "SELECT 
-                    (CAST(w.Temp / 10 AS INT) * 10) as bracket,
-                    COUNT(*) as count
+                    (CAST(((w.Temp - 32) * 5.0 / 9.0) / 5 AS INT) * 5) as bracket,
+                    COUNT(*) as count,
+                    COUNT(DISTINCT d.Sci_Name) as species_count
                  FROM detections d
                  JOIN weather w ON d.Date = w.Date AND CAST(SUBSTR(d.Time, 1, 2) AS INT) = w.Hour
+                 WHERE $where_clause
                  GROUP BY bracket
                  ORDER BY bracket ASC";
     $res_temp = $db->query($sql_temp);
     $temp_brackets = [];
     while ($row = $res_temp->fetchArray(SQLITE3_ASSOC)) {
+        $b = (int)$row['bracket'];
         $temp_brackets[] = [
-            'bracket' => $row['bracket'] . '-' . ($row['bracket'] + 10),
-            'count' => (int)$row['count']
+            'bracket' => "$b – " . ($b + 5) . "°C",
+            'count' => (int)$row['count'],
+            'species_count' => (int)$row['species_count']
         ];
     }
 
-    // 2. Condition Impact
+    // 2. Condition Impact (WMO Groupings)
+    $master_conditions = [
+        'Clear' => ['description' => 'Clear', 'emoji' => '☀️', 'det_count' => 0, 'species_count' => 0],
+        'Cloudy' => ['description' => 'Cloudy', 'emoji' => '☁️', 'det_count' => 0, 'species_count' => 0],
+        'Fog' => ['description' => 'Fog', 'emoji' => '🌫️', 'det_count' => 0, 'species_count' => 0],
+        'Rain' => ['description' => 'Rain', 'emoji' => '🌧️', 'det_count' => 0, 'species_count' => 0],
+        'Snow' => ['description' => 'Snow', 'emoji' => '❄️', 'det_count' => 0, 'species_count' => 0],
+        'Thunderstorm' => ['description' => 'Thunderstorm', 'emoji' => '⛈️', 'det_count' => 0, 'species_count' => 0]
+    ];
+
+
     $sql_cond = "SELECT 
-                    w.ConditionCode,
-                    COUNT(*) as count
-                 FROM detections d
-                 JOIN weather w ON d.Date = w.Date AND CAST(SUBSTR(d.Time, 1, 2) AS INT) = w.Hour
-                 GROUP BY w.ConditionCode
-                 ORDER BY count DESC";
+        CASE 
+            WHEN w.ConditionCode = 0 THEN 'Clear'
+            WHEN w.ConditionCode BETWEEN 1 AND 3 THEN 'Cloudy'
+            WHEN w.ConditionCode IN (45, 48) THEN 'Fog'
+            WHEN w.ConditionCode BETWEEN 51 AND 67 OR w.ConditionCode BETWEEN 80 AND 82 THEN 'Rain'
+            WHEN w.ConditionCode BETWEEN 71 AND 77 OR w.ConditionCode IN (85, 86) THEN 'Snow'
+            WHEN w.ConditionCode BETWEEN 95 AND 99 THEN 'Thunderstorm'
+            ELSE 'Cloudy' 
+        END as description,
+        COUNT(*) as det_count, 
+        COUNT(DISTINCT d.Sci_Name) as species_count 
+        FROM detections d 
+        INNER JOIN weather w ON d.Date = w.Date AND CAST(substr(d.Time, 1, 2) AS INTEGER) = w.Hour 
+        WHERE $where_clause
+        GROUP BY description";
     $res_cond = $db->query($sql_cond);
-    $condition_impact = [];
-    while ($row = $res_cond->fetchArray(SQLITE3_ASSOC)) {
-        $condition_impact[] = [
-            'code' => (int)$row['ConditionCode'],
-            'count' => (int)$row['count']
-        ];
+    while($row = $res_cond->fetchArray(SQLITE3_ASSOC)) { 
+        $desc = $row['description'];
+        if (isset($master_conditions[$desc])) {
+            $master_conditions[$desc]['det_count'] = (int)$row['det_count'];
+            $master_conditions[$desc]['species_count'] = (int)$row['species_count'];
+        }
     }
 
-    // 3. Wind Impact (Wind Speed brackets of 5 mph)
+    // 3. Wind Impact (Wind Speed brackets)
+    $unified_wind = [
+        'Calm (0-5)' => ['bracket' => 'Calm (0-5)', 'emoji' => '🍃', 'det_count' => 0, 'species_count' => 0],
+        'Breezy (6-15)' => ['bracket' => 'Breezy (6-15)', 'emoji' => '🌬️', 'det_count' => 0, 'species_count' => 0],
+        'Windy (16-25)' => ['bracket' => 'Windy (16-25)', 'emoji' => '💨', 'det_count' => 0, 'species_count' => 0],
+        'Very Windy (26+)' => ['bracket' => 'Very Windy (26+)', 'emoji' => '🌪️', 'det_count' => 0, 'species_count' => 0]
+    ];
+
+
     $sql_wind = "SELECT 
-                    (CAST(w.WindSpeed / 5 AS INT) * 5) as bracket,
-                    COUNT(*) as count
-                 FROM detections d
-                 JOIN weather w ON d.Date = w.Date AND CAST(SUBSTR(d.Time, 1, 2) AS INT) = w.Hour
-                 GROUP BY bracket
-                 ORDER BY bracket ASC";
+        CASE 
+            WHEN w.WindSpeed <= 5 THEN 'Calm (0-5)'
+            WHEN w.WindSpeed <= 15 THEN 'Breezy (6-15)'
+            WHEN w.WindSpeed <= 25 THEN 'Windy (16-25)'
+            ELSE 'Very Windy (26+)'
+        END as bracket,
+        COUNT(*) as det_count, 
+        COUNT(DISTINCT d.Sci_Name) as species_count 
+        FROM detections d 
+        INNER JOIN weather w ON d.Date = w.Date AND CAST(substr(d.Time, 1, 2) AS INTEGER) = w.Hour 
+        WHERE $where_clause AND w.WindSpeed IS NOT NULL
+        GROUP BY bracket";
     $res_wind = $db->query($sql_wind);
-    $wind_impact = [];
     while ($row = $res_wind->fetchArray(SQLITE3_ASSOC)) {
-        $wind_impact[] = [
-            'bracket' => $row['bracket'] . '-' . ($row['bracket'] + 5),
+        $b = $row['bracket'];
+        if (isset($unified_wind[$b])) {
+            $unified_wind[$b]['det_count'] = (int)$row['det_count'];
+            $unified_wind[$b]['species_count'] = (int)$row['species_count'];
+        }
+    }
+
+    // 4. Species Ideal Conditions (Celsius converted)
+    $sql_ideal = "SELECT 
+                    d.Com_Name, 
+                    ROUND(AVG((w.Temp - 32) * 5.0 / 9.0), 1) as avg_temp, 
+                    ROUND(MIN((w.Temp - 32) * 5.0 / 9.0), 1) as min_temp, 
+                    ROUND(MAX((w.Temp - 32) * 5.0 / 9.0), 1) as max_temp, 
+                    COUNT(*) as cnt 
+                  FROM detections d 
+                  INNER JOIN weather w ON d.Date = w.Date AND CAST(substr(d.Time, 1, 2) AS INTEGER) = w.Hour 
+                  WHERE $where_clause
+                  GROUP BY d.Sci_Name 
+                  HAVING cnt >= 5 
+                  ORDER BY cnt DESC";
+    $res_ideal = $db->query($sql_ideal);
+    $species_ideal = [];
+    while($row = $res_ideal->fetchArray(SQLITE3_ASSOC)) { 
+        $row['cnt'] = (int)$row['cnt'];
+        $row['avg_temp'] = (float)$row['avg_temp'];
+        $row['min_temp'] = (float)$row['min_temp'];
+        $row['max_temp'] = (float)$row['max_temp'];
+        $species_ideal[] = $row; 
+    }
+
+    // 5. Daily Trend (Line graph inputs) - Last 30 Days trend enforced
+    $sql_trend = "SELECT 
+                    d.Date, 
+                    COUNT(*) as det_count, 
+                    ROUND(AVG((w.Temp - 32) * 5.0 / 9.0), 1) as avg_temp 
+                  FROM detections d 
+                  LEFT JOIN weather w ON d.Date = w.Date AND CAST(substr(d.Time, 1, 2) AS INTEGER) = w.Hour 
+                  WHERE d.Date >= DATE('now', '-30 days', 'localtime') 
+                  GROUP BY d.Date 
+                  ORDER BY d.Date ASC";
+    $res_trend = $db->query($sql_trend);
+    $temp_vs_detections = [];
+    while($row = $res_trend->fetchArray(SQLITE3_ASSOC)) { 
+        $temp_vs_detections[] = [
+            'date' => $row['Date'],
+            'det_count' => (int)$row['det_count'],
+            'avg_temp' => (float)$row['avg_temp']
+        ]; 
+    }
+
+    // 6. Species vs Condition Correlation
+    $sql_sp_cond = "SELECT 
+                        d.Sci_Name, d.Com_Name,
+                        CASE 
+                            WHEN w.ConditionCode = 0 THEN 'Clear'
+                            WHEN w.ConditionCode BETWEEN 1 AND 3 THEN 'Cloudy'
+                            WHEN w.ConditionCode IN (45, 48) THEN 'Fog'
+                            WHEN w.ConditionCode BETWEEN 51 AND 67 OR w.ConditionCode BETWEEN 80 AND 82 THEN 'Rain'
+                            WHEN w.ConditionCode BETWEEN 71 AND 77 OR w.ConditionCode IN (85, 86) THEN 'Snow'
+                            WHEN w.ConditionCode BETWEEN 95 AND 99 THEN 'Thunderstorm'
+                            ELSE 'Cloudy' 
+                        END as description,
+                        COUNT(*) as count
+                     FROM detections d
+                     JOIN weather w ON d.Date = w.Date AND CAST(SUBSTR(d.Time, 1, 2) AS INT) = w.Hour
+                     WHERE d.Sci_Name IN (SELECT Sci_Name FROM detections WHERE $where_clause_sub GROUP BY Sci_Name ORDER BY COUNT(*) DESC LIMIT 5)
+                       AND $where_clause
+                     GROUP BY d.Sci_Name, description";
+    $res_sp_cond = $db->query($sql_sp_cond);
+    $sp_cond_data = [];
+    while ($row = $res_sp_cond->fetchArray(SQLITE3_ASSOC)) {
+        $sci = $row['Sci_Name'];
+        if (!isset($sp_cond_data[$sci])) {
+            $sp_cond_data[$sci] = [
+                'Sci_Name' => $sci,
+                'Com_Name' => $row['Com_Name'],
+                'conditions' => [
+                    'Clear' => 0, 'Cloudy' => 0, 'Fog' => 0, 
+                    'Rain' => 0, 'Snow' => 0, 'Thunderstorm' => 0
+                ],
+                'total' => 0
+            ];
+        }
+        $desc = $row['description'];
+        if (isset($sp_cond_data[$sci]['conditions'][$desc])) {
+            $sp_cond_data[$sci]['conditions'][$desc] = (int)$row['count'];
+            $sp_cond_data[$sci]['total'] += (int)$row['count'];
+        }
+    }
+
+    // 7. Wind Sensitivity
+    $sql_wind_sens = "SELECT 
+                        d.Sci_Name, d.Com_Name,
+                        CASE WHEN w.WindSpeed <= 10 THEN 'Calm' ELSE 'Windy' END as wind_type,
+                        COUNT(*) as count
+                     FROM detections d
+                     JOIN weather w ON d.Date = w.Date AND CAST(SUBSTR(d.Time, 1, 2) AS INT) = w.Hour
+                     WHERE d.Sci_Name IN (SELECT Sci_Name FROM detections WHERE $where_clause_sub GROUP BY Sci_Name ORDER BY COUNT(*) DESC LIMIT 5)
+                       AND $where_clause AND w.WindSpeed IS NOT NULL
+                     GROUP BY d.Sci_Name, wind_type";
+    $res_wind_sens = $db->query($sql_wind_sens);
+    $wind_sens_data = [];
+    while ($row = $res_wind_sens->fetchArray(SQLITE3_ASSOC)) {
+        $sci = $row['Sci_Name'];
+        if (!isset($wind_sens_data[$sci])) {
+            $wind_sens_data[$sci] = [
+                'Sci_Name' => $sci,
+                'Com_Name' => $row['Com_Name'],
+                'Calm' => 0,
+                'Windy' => 0
+            ];
+        }
+        $wind_sens_data[$sci][$row['wind_type']] = (int)$row['count'];
+    }
+
+    // 8. Day vs Night Condition Correlation (Radar Chart)
+    $sql_day_night = "SELECT 
+                        w.IsDay,
+                        CASE 
+                            WHEN w.ConditionCode = 0 THEN 'Clear'
+                            WHEN w.ConditionCode BETWEEN 1 AND 3 THEN 'Cloudy'
+                            WHEN w.ConditionCode IN (45, 48) THEN 'Fog'
+                            WHEN w.ConditionCode BETWEEN 51 AND 67 OR w.ConditionCode BETWEEN 80 AND 82 THEN 'Rain'
+                            WHEN w.ConditionCode BETWEEN 71 AND 77 OR w.ConditionCode IN (85, 86) THEN 'Snow'
+                            WHEN w.ConditionCode BETWEEN 95 AND 99 THEN 'Thunderstorm'
+                            ELSE 'Cloudy' 
+                        END as description,
+                        COUNT(*) as count
+                     FROM detections d
+                     JOIN weather w ON d.Date = w.Date AND CAST(SUBSTR(d.Time, 1, 2) AS INT) = w.Hour
+                     WHERE $where_clause
+                     GROUP BY w.IsDay, description";
+    $res_day_night = $db->query($sql_day_night);
+    $day_night_data = [
+        'day' => ['Clear' => 0, 'Cloudy' => 0, 'Fog' => 0, 'Rain' => 0, 'Snow' => 0, 'Thunderstorm' => 0],
+        'night' => ['Clear' => 0, 'Cloudy' => 0, 'Fog' => 0, 'Rain' => 0, 'Snow' => 0, 'Thunderstorm' => 0]
+    ];
+    while ($row = $res_day_night->fetchArray(SQLITE3_ASSOC)) {
+        $type = ($row['IsDay'] == 1) ? 'day' : 'night';
+        $desc = $row['description'];
+        if (isset($day_night_data[$type][$desc])) {
+            $day_night_data[$type][$desc] = (int)$row['count'];
+        }
+    }
+
+    // 9. Golden Window (Temp vs Wind Matrix)
+    $sql_golden = "SELECT 
+                        CASE 
+                            WHEN ((w.Temp - 32) * 5.0 / 9.0) < 10 THEN '< 10°C'
+                            WHEN ((w.Temp - 32) * 5.0 / 9.0) <= 18 THEN '10-18°C'
+                            WHEN ((w.Temp - 32) * 5.0 / 9.0) <= 25 THEN '18-25°C'
+                            ELSE '> 25°C'
+                        END as temp_bracket,
+                        CASE 
+                            WHEN w.WindSpeed <= 5 THEN 'Calm (0-5)'
+                            WHEN w.WindSpeed <= 15 THEN 'Breezy (6-15)'
+                            ELSE 'Windy (> 15)'
+                        END as wind_bracket,
+                        COUNT(*) as count
+                     FROM detections d
+                     JOIN weather w ON d.Date = w.Date AND CAST(SUBSTR(d.Time, 1, 2) AS INT) = w.Hour
+                     WHERE $where_clause AND w.Temp IS NOT NULL AND w.WindSpeed IS NOT NULL
+                     GROUP BY temp_bracket, wind_bracket";
+    $res_golden = $db->query($sql_golden);
+    $golden_data = [];
+    while ($row = $res_golden->fetchArray(SQLITE3_ASSOC)) {
+        $golden_data[] = [
+            'temp' => $row['temp_bracket'],
+            'wind' => $row['wind_bracket'],
             'count' => (int)$row['count']
         ];
     }
 
     json_success([
         'has_weather' => true,
+        'period' => $period,
         'temp_brackets' => $temp_brackets,
-        'condition_impact' => $condition_impact,
-        'wind_impact' => $wind_impact
+        'condition_impact' => array_values($master_conditions),
+        'wind_impact' => array_values($unified_wind), 
+        'species_ideal' => $species_ideal,
+        'temp_vs_detections' => $temp_vs_detections,
+        'species_condition_correlation' => array_values($sp_cond_data),
+        'wind_sensitivity' => array_values($wind_sens_data),
+        'day_night_condition' => $day_night_data,
+        'golden_window' => $golden_data
     ]);
-}
 
+}
