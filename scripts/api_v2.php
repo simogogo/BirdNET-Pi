@@ -837,7 +837,7 @@ function handle_charts($type)
         
         // --- HOURLY WEATHER ADDITION ---
         $hourlyWeather = array_fill(0, 24, null);
-        $stmt_w = $db->prepare("SELECT Hour, Temp, WindSpeed, WindDirection, ConditionCode FROM weather WHERE Date = :date");
+        $stmt_w = $db->prepare("SELECT Hour, Temp, WindSpeed, WindDirection, ConditionCode, IsDay FROM weather WHERE Date = :date");
         $stmt_w->bindValue(':date', $date);
         $res_w = $stmt_w->execute();
         while ($wrow = $res_w->fetchArray(SQLITE3_ASSOC)) {
@@ -857,7 +857,8 @@ function handle_charts($type)
                 'temp' => $tempC,
                 'wind' => $wrow['WindSpeed'] ?? null,
                 'wind_deg' => $wrow['WindDirection'] ?? null,
-                'condition' => $condDesc
+                'condition' => $condDesc,
+                'isday' => isset($wrow['IsDay']) ? (int)$wrow['IsDay'] : (isset($wrow['isday']) ? (int)$wrow['isday'] : 1)
             ];
         }
 
@@ -1033,7 +1034,7 @@ function handle_report($type)
     if ($type === 'daily') {
         $hourlyWeather = array_fill(0, 24, null);
 
-        $stmt_w = $db->prepare("SELECT Hour, Temp, WindSpeed, WindDirection, ConditionCode FROM weather WHERE Date = :date");
+        $stmt_w = $db->prepare("SELECT Hour, Temp, WindSpeed, WindDirection, ConditionCode, IsDay FROM weather WHERE Date = :date");
         $stmt_w->bindValue(':date', $targetDate);
         $res_w = $stmt_w->execute();
         while ($wrow = $res_w->fetchArray(SQLITE3_ASSOC)) {
@@ -1053,7 +1054,8 @@ function handle_report($type)
                 'temp' => $tempC,
                 'wind' => $wrow['WindSpeed'] ?? null,
                 'wind_deg' => $wrow['WindDirection'] ?? null, // <--- Injection
-                'condition' => $condDesc
+                'condition' => $condDesc,
+                'isday' => isset($wrow['IsDay']) ? (int)$wrow['IsDay'] : (isset($wrow['isday']) ? (int)$wrow['isday'] : 1)
             ];
         }
 

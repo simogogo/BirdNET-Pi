@@ -67011,17 +67011,21 @@ B.b.S(o,new A.X(p,new A.aSb(this.a,a,q),A.a1(p).h("X<1,d>")))
 return A.aI(o,B.j,r,B.i,B.k,0,B.v)},
 $S:338}
 A.aS7.prototype={
-$1(a){var s,r,q,p=null,o=this.a.d
-o.toString
-s=J.ac(o)
-r=a<s.gA(o)?s.i(o,a):p
-o=r==null?p:J.a2(r,"condition")
-q=J.bM(o==null?"Clear":o)
-o=this.b
-if(!(o<18))s=B.f.ag(a,2)!==0&&o<26
-else s=!0
-if(s)return A.au(p,p,o)
-return A.au(A.bD(A.oH("assets/images/weather/"+q.toLowerCase()+".png",new A.aS6(),B.k9,50,50),p,p),p,o)},
+$1(a){var s,r,q,p,o,n=null,m=this.a.d
+m.toString
+s=J.ac(m)
+r=a<s.gA(m)?s.i(m,a):n
+m=r==null
+s=m?n:J.a2(r,"condition")
+q=J.bM(s==null?"Clear":s)
+s=this.b
+if(!(s<18))p=B.f.ag(a,2)!==0&&s<26
+else p=!0
+if(p)return A.au(n,n,s)
+if(q.toLowerCase()==="clear")o=J.c(m?n:J.a2(r,"isday"),0)
+else o=!1
+m=o?"assets/images/weather/clearmoon.png":"assets/images/weather/"+q.toLowerCase()+".png"
+return A.au(A.bD(A.oH(m,new A.aS6(),B.k9,50,50),n,n),n,s)},
 $S:107}
 A.aS6.prototype={
 $3(a,b,c){return B.a9},
