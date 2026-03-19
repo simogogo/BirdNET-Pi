@@ -849,9 +849,9 @@ function handle_charts($type)
             if ($code === 0) $condDesc = 'Clear';
             else if ($code >= 1 && $code <= 3) $condDesc = 'Cloudy';
             else if ($code == 45 || $code == 48) $condDesc = 'Fog';
-            else if (($code >= 51 && $code <= 67) || ($code >= 80 && $code <= 82)) $condDesc = 'Rain';
+            else if (($code >= 51 && $code <= 64) || ($code >= 80 && $code <= 82)) $condDesc = 'Rain';
             else if (($code >= 71 && $code <= 77) || $code == 85 || $code == 86) $condDesc = 'Snow';
-            else if ($code >= 95 && $code <= 99) $condDesc = 'Thunderstorm';
+            else if (($code >= 95 && $code <= 99) || ($code >= 65 && $code <= 67)) $condDesc = 'Thunderstorm';
 
             $hourlyWeather[$h] = [
                 'temp' => $tempC,
@@ -1045,9 +1045,9 @@ function handle_report($type)
             if ($code === 0) $condDesc = 'Clear';
             else if ($code >= 1 && $code <= 3) $condDesc = 'Cloudy';
             else if ($code == 45 || $code == 48) $condDesc = 'Fog';
-            else if (($code >= 51 && $code <= 67) || ($code >= 80 && $code <= 82)) $condDesc = 'Rain';
+            else if (($code >= 51 && $code <= 64) || ($code >= 80 && $code <= 82)) $condDesc = 'Rain';
             else if (($code >= 71 && $code <= 77) || $code == 85 || $code == 86) $condDesc = 'Snow';
-            else if ($code >= 95 && $code <= 99) $condDesc = 'Thunderstorm';
+            else if (($code >= 95 && $code <= 99) || ($code >= 65 && $code <= 67)) $condDesc = 'Thunderstorm';
 
             $hourlyWeather[$h] = [
                 'temp' => $tempC,
@@ -2160,9 +2160,9 @@ function handle_insights($method, $id)
             WHEN w.ConditionCode = 0 THEN 'Clear'
             WHEN w.ConditionCode BETWEEN 1 AND 3 THEN 'Cloudy'
             WHEN w.ConditionCode IN (45, 48) THEN 'Fog'
-            WHEN w.ConditionCode BETWEEN 51 AND 67 OR w.ConditionCode BETWEEN 80 AND 82 THEN 'Rain'
+            WHEN w.ConditionCode BETWEEN 51 AND 64 OR w.ConditionCode BETWEEN 80 AND 82 THEN 'Rain'
             WHEN w.ConditionCode BETWEEN 71 AND 77 OR w.ConditionCode IN (85, 86) THEN 'Snow'
-            WHEN w.ConditionCode BETWEEN 95 AND 99 THEN 'Thunderstorm'
+            WHEN w.ConditionCode BETWEEN 95 AND 99 OR w.ConditionCode BETWEEN 65 AND 67 THEN 'Thunderstorm'
             ELSE 'Cloudy' 
         END as description,
         COUNT(*) as det_count, 
@@ -2261,9 +2261,9 @@ function handle_insights($method, $id)
                             WHEN w.ConditionCode = 0 THEN 'Clear'
                             WHEN w.ConditionCode BETWEEN 1 AND 3 THEN 'Cloudy'
                             WHEN w.ConditionCode IN (45, 48) THEN 'Fog'
-                            WHEN w.ConditionCode BETWEEN 51 AND 67 OR w.ConditionCode BETWEEN 80 AND 82 THEN 'Rain'
+                            WHEN w.ConditionCode BETWEEN 51 AND 64 OR w.ConditionCode BETWEEN 80 AND 82 THEN 'Rain'
                             WHEN w.ConditionCode BETWEEN 71 AND 77 OR w.ConditionCode IN (85, 86) THEN 'Snow'
-                            WHEN w.ConditionCode BETWEEN 95 AND 99 THEN 'Thunderstorm'
+                            WHEN w.ConditionCode BETWEEN 95 AND 99 OR w.ConditionCode BETWEEN 65 AND 67 THEN 'Thunderstorm'
                             ELSE 'Cloudy' 
                         END as description,
                         COUNT(*) as count
@@ -2326,10 +2326,10 @@ function handle_insights($method, $id)
                             WHEN w.ConditionCode = 0 THEN 'Clear'
                             WHEN w.ConditionCode BETWEEN 1 AND 3 THEN 'Cloudy'
                             WHEN w.ConditionCode IN (45, 48) THEN 'Fog'
-                            WHEN w.ConditionCode BETWEEN 51 AND 67 OR w.ConditionCode BETWEEN 80 AND 82 THEN 'Rain'
+                            WHEN w.ConditionCode BETWEEN 51 AND 64 OR w.ConditionCode BETWEEN 80 AND 82 THEN 'Rain'
                             WHEN w.ConditionCode BETWEEN 71 AND 77 OR w.ConditionCode IN (85, 86) THEN 'Snow'
-                            WHEN w.ConditionCode BETWEEN 95 AND 99 THEN 'Thunderstorm'
-                            ELSE 'Cloudy' 
+                            WHEN w.ConditionCode BETWEEN 95 AND 99 OR w.ConditionCode BETWEEN 65 AND 67 THEN 'Thunderstorm'
+                            ELSE 'Cloudy'
                         END as description,
                         COUNT(*) as count
                      FROM detections d
