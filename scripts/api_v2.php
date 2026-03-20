@@ -2192,19 +2192,22 @@ function handle_trends($method, $species, $start_date, $end_date)
     if (!empty($lat) && !empty($lon)) {
         $lat = (float)$lat;
         $lon = (float)$lon;
-        foreach ($daily as $d) {
-            $date_str = $d['date'];
-            $timestamp = strtotime($date_str);
-            $sun = date_sun_info($timestamp, $lat, $lon);
-            if ($sun) {
-                // Return fractional hours (0-24) for easier frontend plotting
-                $sunrise_hour = (float)date('H', $sun['sunrise']) + (float)date('i', $sun['sunrise']) / 60.0;
-                $sunset_hour = (float)date('H', $sun['sunset']) + (float)date('i', $sun['sunset']) / 60.0;
-                $sun_info[] = [
-                    'date' => $date_str,
-                    'sunrise' => round($sunrise_hour, 2),
-                    'sunset' => round($sunset_hour, 2),
-                ];
+        if (count($daily) > 0) {
+            $start = strtotime($daily[0]['date']);
+            $end = strtotime($daily[count($daily) - 1]['date']);
+            
+            for ($t = $start; $t <= $end; $t = strtotime('+1 day', $t)) {
+                $date_str = date('Y-m-d', $t);
+                $sun = date_sun_info($t, $lat, $lon);
+                if ($sun) {
+                    $sunrise_hour = (float)date('H', $sun['sunrise']) + (float)date('i', $sun['sunrise']) / 60.0;
+                    $sunset_hour = (float)date('H', $sun['sunset']) + (float)date('i', $sun['sunset']) / 60.0;
+                    $sun_info[] = [
+                        'date' => $date_str,
+                        'sunrise' => round($sunrise_hour, 2),
+                        'sunset' => round($sunset_hour, 2),
+                    ];
+                }
             }
         }
     }
@@ -2224,6 +2227,7 @@ function handle_trends($method, $species, $start_date, $end_date)
         'daily_trend' => $daily,
         'day_night_condition' => $day_night_data,
         'daily_hourly' => $daily_hourly,
-        'sun_info' => $sun_info
+        'sun_info' => $sun_info,
+        'server_timezone' => date_default_timezone_get()
     ]);
 }
