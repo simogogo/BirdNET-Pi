@@ -70301,7 +70301,7 @@ r=A.cV(n,null)
 p=o.as
 p.toString
 return A.hA(a.cT(s.$1(new A.TI(r.cZ(p),m,q)),t.QW),new A.bgT(o),new A.bgU(),new A.bgV())},
-azv(a,b){var s,r,q,p,o,n,m,l,k,j,i,h,g,f=null
+azv(a,b,c){var s,r,q,p,o,n,m,l,k,j,i,h,g,f=null
 if(b.a===0)return B.ag
 s=b.i(0,"day")
 if(s==null){s=t.z
@@ -70332,7 +70332,7 @@ h=$.l
 g=h?B.b_:B.b1
 q=A.bwu(f,j,new A.bgm(this,n),f,!1,f,new A.b4(g,1,B.I,-1),B.y6,q,new A.b4((h?B.b_:B.b1).aE(0.4),1,B.I,-1),3,i,f,f)
 j=t.p
-return A.am(f,A.aD(A.b([A.bh(new A.Nj(q,B.ae,B.d4,f,f),1),B.bY,A.aB(A.b([this.a7d(B.ez,"Giorno \u2600\ufe0f"),B.jO,this.a7d(B.xI,"Notte \ud83c\udf19")],j),B.j,B.bX,B.k,0,f,f)],j),B.j,f,B.i,B.k,0,B.v),B.l,f,f,new A.aN(s,f,f,r,f,f,B.B),f,260,f,f,B.bV,f,f,f)},
+return A.am(f,A.aD(A.b([A.bh(new A.Nj(q,B.ae,B.d4,f,f),1),B.bY,A.aB(A.b([this.a7d(B.ez,"Giorno \u2600\ufe0f"),B.jO,this.a7d(B.xI,"Notte \ud83c\udf19")],j),B.j,B.bX,B.k,0,f,f)],j),B.j,f,B.i,B.k,0,B.v),B.l,f,f,new A.aN(s,f,f,r,f,f,B.B),f,c,f,f,B.bV,f,f,f)},
 aAm(a,b){var s,r,q,p,o,n=null
 if(b.a===0)return B.ag
 s=b.i(0,"day")
@@ -70526,33 +70526,34 @@ m=m.i(a,"sun_info")
 return A.uh(new A.bgS(this.a,s,o,p,q,n,A.e4(m==null?[]:m,!0,r)))},
 $S:612}
 A.bgS.prototype={
-$2(a,b){var s,r,q,p,o,n=this,m=null,l=$.l,k=l?B.aM:B.aN,j=A.an(16),i=t.p,h=A.aD(A.b([B.aux,B.c3,A.am(m,new A.h2(1,new A.a8S(n.b,m),m),B.l,m,m,new A.aN(k,m,A.dL((l?B.b_:B.b1).aE(0.1),1),j,m,m,B.B),m,m,m,m,B.bV,m,m,m)],i),B.j,m,B.i,B.k,0,B.v)
-j=n.a
-k=n.c
+$2(a,b){var s,r,q,p,o=this,n=null,m=b.b,l=m>800,k=$.l,j=k?B.aM:B.aN,i=A.an(16),h=t.p,g=A.aD(A.b([B.aux,B.c3,A.am(n,new A.h2(1,new A.a8S(o.b,n),n),B.l,n,n,new A.aN(j,n,A.dL((k?B.b_:B.b1).aE(0.1),1),i,n,n,B.B),n,n,n,n,B.bV,n,n,n)],h),B.j,n,B.i,B.k,0,B.v)
+i=o.a
+j=o.c
 s=t.N
 r=t.z
-q=A.aD(A.b([B.auo,B.aW,j.azv(a,A.mc(k,s,r)),B.aW,j.aAm(a,A.mc(k,s,r))],i),B.j,m,B.i,B.k,0,B.v)
-k=j.x
-k.toString
-p=n.d
-o=J.a1(p,"Com_Name")
-l=o==null?"":o
-r=A.b([new A.PW(k,l,A.mc(p,s,r),m),B.bs],i)
-if(b.b>800)r.push(A.aB(A.b([A.bh(h,1),B.aon,A.bh(q,1)],i),B.a8,B.i,B.k,0,m,m))
-else B.b.S(r,A.b([h,B.bs,q],i))
+q=A.mc(j,s,r)
+p=A.aD(A.b([B.auo,B.aW,i.azv(a,q,l?(m-32)/4:260),B.aW,i.aAm(a,A.mc(j,s,r))],h),B.j,n,B.i,B.k,0,B.v)
+m=i.x
+m.toString
+k=o.d
+j=J.a1(k,"Com_Name")
+if(j==null)j=""
+r=A.b([new A.PW(m,j,A.mc(k,s,r),n),B.bs],h)
+if(l)r.push(A.aB(A.b([A.bh(g,1),B.aon,A.bh(p,1)],h),B.a8,B.i,B.k,0,n,n))
+else B.b.S(r,A.b([g,B.bs,p],h))
 r.push(B.yR)
 r.push(B.aul)
 r.push(B.c3)
-l=$.l
-k=l?B.aM:B.aN
-s=A.an(16)
-p=A.dL((l?B.b_:B.b1).aE(0.1),1)
-r.push(A.am(m,A.aD(A.b([B.bY,A.aB(A.b([A.aB(A.b([A.bmZ(B.QP,new A.bgQ(j),m,j.at),B.aun],i),B.j,B.i,B.k,0,m,m),B.jO,A.aB(A.b([A.bmZ(B.QQ,new A.bgR(j),m,j.ax),B.aum],i),B.j,B.i,B.k,0,m,m)],i),B.j,B.bX,B.k,0,m,m),B.bY,A.au(new A.ab3(n.e,j.at,j.ax,m),240,m)],i),B.j,m,B.i,B.k,0,B.v),B.l,m,m,new A.aN(k,m,p,s,m,m,B.B),m,m,m,m,B.bV,m,m,m))
+m=$.l
+k=m?B.aM:B.aN
+j=A.an(16)
+s=A.dL((m?B.b_:B.b1).aE(0.1),1)
+r.push(A.am(n,A.aD(A.b([B.bY,A.aB(A.b([A.aB(A.b([A.bmZ(B.QP,new A.bgQ(i),n,i.at),B.aun],h),B.j,B.i,B.k,0,n,n),B.jO,A.aB(A.b([A.bmZ(B.QQ,new A.bgR(i),n,i.ax),B.aum],h),B.j,B.i,B.k,0,n,n)],h),B.j,B.bX,B.k,0,n,n),B.bY,A.au(new A.ab3(o.e,i.at,i.ax,n),240,n)],h),B.j,n,B.i,B.k,0,B.v),B.l,n,n,new A.aN(k,n,s,j,n,n,B.B),n,n,n,n,B.bV,n,n,n))
 r.push(B.yR)
 r.push(B.aus)
 r.push(B.aW)
-r.push(new A.abd(n.f,n.r,m))
-return A.r8(A.aD(r,B.j,m,B.i,B.k,0,B.v),m,B.V,B.bV,m,m,B.aD)},
+r.push(new A.abd(o.f,o.r,n))
+return A.r8(A.aD(r,B.j,n,B.i,B.k,0,B.v),n,B.V,B.bV,n,n,B.aD)},
 $S:250}
 A.bgQ.prototype={
 $1(a){var s=this.a
