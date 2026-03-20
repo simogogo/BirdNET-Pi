@@ -2122,18 +2122,46 @@ function handle_trends($method, $species, $start_date, $end_date)
         $hourly[(int)$row['hour']] = (int)$row['count'];
     }
 
-    // 3. Daily distribution with weather overlays
-    $stmt_daily = $db->prepare("SELECT d.Date, COUNT(*) as count, ROUND(AVG((w.Temp - 32) * 5.0 / 9.0), 1) as avg_temp, ROUND(AVG(w.WindSpeed), 1) as avg_wind FROM detections d LEFT JOIN weather w ON d.Date = w.Date AND CAST(SUBSTR(d.Time, 1, 2) AS INT) = w.Hour WHERE $where_clause_daily GROUP BY d.Date ORDER BY d.Date ASC");
+    // 3a. Get daily detections
+    $stmt_daily = $db->prepare("SELECT Date, COUNT(*) as count FROM detections WHERE $where_clause GROUP BY Date ORDER BY Date ASC");
     $stmt_daily->bindValue(':species', $species);
     ensure_db_ok($stmt_daily);
     $res_daily = $stmt_daily->execute();
-    $daily = [];
+    $daily_raw_map = [];
     while ($row = $res_daily->fetchArray(SQLITE3_ASSOC)) {
+        $daily_raw_map[$row['Date']] = (int)$row['count'];
+    }
+
+    // Determine continuous date range
+    $start_dt = $start_date && preg_match('/^\d{4}-\d{2}-\d{2}$/', $start_date) ? $start_date : date('Y-m-d', strtotime('-30 days'));
+    $end_dt = $end_date && preg_match('/^\d{4}-\d{2}-\d{2}$/', $end_date) ? $end_date : date('Y-m-d');
+
+    // 3b. Get continuous daily weather stats
+    $stmt_weather = $db->prepare("SELECT Date, ROUND(AVG((Temp - 32) * 5.0 / 9.0), 1) as avg_temp, ROUND(AVG(WindSpeed), 1) as avg_wind FROM weather WHERE Date BETWEEN :start AND :end GROUP BY Date");
+    $stmt_weather->bindValue(':start', $start_dt);
+    $stmt_weather->bindValue(':end', $end_dt);
+    ensure_db_ok($stmt_weather);
+    $res_weather = $stmt_weather->execute();
+    $weather_map = [];
+    while ($w = $res_weather->fetchArray(SQLITE3_ASSOC)) {
+        $weather_map[$w['Date']] = $w;
+    }
+
+    // 3c. Reconstruct continuous daily statistics
+    $daily = [];
+    $start_ts = strtotime($start_dt);
+    $end_ts = strtotime($end_dt);
+
+    for ($t = $start_ts; $t <= $end_ts; $t = strtotime('+1 day', $t)) {
+        $date_str = date('Y-m-d', $t);
+        $count = $daily_raw_map[$date_str] ?? 0;
+        $w = $weather_map[$date_str] ?? ['avg_temp' => null, 'avg_wind' => null];
+        
         $daily[] = [
-            'date' => $row['Date'],
-            'count' => (int)$row['count'],
-            'avg_temp' => $row['avg_temp'] !== null ? (float)$row['avg_temp'] : null,
-            'avg_wind' => $row['avg_wind'] !== null ? (float)$row['avg_wind'] : null
+            'date' => $date_str,
+            'count' => $count,
+            'avg_temp' => $w['avg_temp'] !== null ? (float)$w['avg_temp'] : null,
+            'avg_wind' => $w['avg_wind'] !== null ? (float)$w['avg_wind'] : null
         ];
     }
     
