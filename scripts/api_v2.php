@@ -1032,6 +1032,94 @@ function handle_report($type)
         }
     }
 
+    $daily_trend = null;
+    $daily_hourly = null;
+    $sun_info = null;
+
+    if ($type === 'weekly' || $type === 'monthly') {
+        // 1. Daily detections & unique species
+        $stmt_daily = $db->prepare("SELECT Date, COUNT(*) as count, COUNT(DISTINCT Sci_Name) as unique_species FROM detections WHERE Date >= :start AND Date <= :end GROUP BY Date ORDER BY Date ASC");
+        $stmt_daily->bindValue(':start', $thisPeriodStart);
+        $stmt_daily->bindValue(':end', $thisPeriodEnd);
+        ensure_db_ok($stmt_daily);
+        $res_daily = $stmt_daily->execute();
+        $daily_raw_map = [];
+        while ($row = $res_daily->fetchArray(SQLITE3_ASSOC)) {
+            $daily_raw_map[$row['Date']] = [
+                'count' => (int)$row['count'],
+                'unique_species' => (int)$row['unique_species']
+            ];
+        }
+
+        // 2. Daily weather stats continuous
+        $stmt_weather = $db->prepare("SELECT Date, ROUND(AVG((Temp - 32) * 5.0 / 9.0), 1) as avg_temp, ROUND(AVG(WindSpeed), 1) as avg_wind FROM weather WHERE Date BETWEEN :start AND :end GROUP BY Date");
+        $stmt_weather->bindValue(':start', $thisPeriodStart);
+        $stmt_weather->bindValue(':end', $thisPeriodEnd);
+        ensure_db_ok($stmt_weather);
+        $res_weather = $stmt_weather->execute();
+        $weather_map = [];
+        while ($w = $res_weather->fetchArray(SQLITE3_ASSOC)) {
+            $weather_map[$w['Date']] = $w;
+        }
+
+        // 3. Reconstruct continuous daily trend
+        $daily_trend = [];
+        $start_ts = strtotime($thisPeriodStart);
+        $end_ts = strtotime($thisPeriodEnd);
+
+        for ($t = $start_ts; $t <= $end_ts; $t = strtotime('+1 day', $t)) {
+            $date_str = date('Y-m-d', $t);
+            $raw = $daily_raw_map[$date_str] ?? ['count' => 0, 'unique_species' => 0];
+            $w = $weather_map[$date_str] ?? ['avg_temp' => null, 'avg_wind' => null];
+            
+            $daily_trend[] = [
+                'date' => $date_str,
+                'count' => $raw['count'],
+                'unique_species' => $raw['unique_species'],
+                'avg_temp' => $w['avg_temp'] !== null ? (float)$w['avg_temp'] : null,
+                'avg_wind' => $w['avg_wind'] !== null ? (float)$w['avg_wind'] : null
+            ];
+        }
+
+        // 4. Daily-Hourly distribution for Heatmap
+        $stmt_daily_hourly = $db->prepare("SELECT Date, SUBSTR(Time, 1, 2) as hour, COUNT(*) as count FROM detections WHERE Date >= :start AND Date <= :end GROUP BY Date, hour ORDER BY Date ASC, hour ASC");
+        $stmt_daily_hourly->bindValue(':start', $thisPeriodStart);
+        $stmt_daily_hourly->bindValue(':end', $thisPeriodEnd);
+        ensure_db_ok($stmt_daily_hourly);
+        $res_daily_hourly = $stmt_daily_hourly->execute();
+        $daily_hourly = [];
+        while ($row = $res_daily_hourly->fetchArray(SQLITE3_ASSOC)) {
+            $daily_hourly[] = [
+                'date' => $row['Date'],
+                'hour' => (int)$row['hour'],
+                'count' => (int)$row['count']
+            ];
+        }
+
+        // 5. Sunrise/Sunset times
+        $config = get_config();
+        $lat = $config['LATITUDE'] ?? $config['latitude'] ?? '';
+        $lon = $config['LONGITUDE'] ?? $config['longitude'] ?? '';
+
+        if (!empty($lat) && !empty($lon)) {
+            $lat = (float)$lat;
+            $lon = (float)$lon;
+            for ($t = $start_ts; $t <= $end_ts; $t = strtotime('+1 day', $t)) {
+                $date_str = date('Y-m-d', $t);
+                $sun = date_sun_info($t, $lat, $lon);
+                if ($sun) {
+                    $sunrise_hour = (float)date('H', $sun['sunrise']) + (float)date('i', $sun['sunrise']) / 60.0;
+                    $sunset_hour = (float)date('H', $sun['sunset']) + (float)date('i', $sun['sunset']) / 60.0;
+                    $sun_info[] = [
+                        'date' => $date_str,
+                        'sunrise' => round($sunrise_hour, 2),
+                        'sunset' => round($sunset_hour, 2),
+                    ];
+                }
+            }
+        }
+    }
+
     // --- HOURLY WEATHER ADDITION ---
     $hourlyWeather = null;
     if ($type === 'daily') {
@@ -1068,7 +1156,6 @@ function handle_report($type)
 
     json_success([
         'period_start' => $thisPeriodStart,
-
         'period_end' => $thisPeriodEnd,
         'total_detections' => $totalThisWeek,
         'total_previous' => $totalLastWeek,
@@ -1078,7 +1165,10 @@ function handle_report($type)
         'new_species' => $newSpecies,
         'species' => $speciesWithChange,
         'species_hourly_counts' => array_values($speciesHourlyCounts),
-        'hourly_weather' => $hourlyWeather, // <--- Injection
+        'hourly_weather' => $hourlyWeather,
+        'daily_trend' => $daily_trend,
+        'daily_hourly' => $daily_hourly,
+        'sun_info' => $sun_info
     ]);
 }
 
