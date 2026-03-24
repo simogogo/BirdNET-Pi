@@ -103,6 +103,9 @@ fi
 if [ ! -e ${EXTRACTED}/main.dart.js ];then
   sudo_with_user ln -fs $HOME/BirdNET-Pi/homepage/main.dart.js ${EXTRACTED}
 fi
+if [ ! -e ${EXTRACTED}/main.dart.js.gz ];then
+  sudo_with_user ln -fs $HOME/BirdNET-Pi/homepage/main.dart.js.gz ${EXTRACTED}
+fi
 if [ ! -e ${EXTRACTED}/manifest.json ];then
   sudo_with_user ln -fs $HOME/BirdNET-Pi/homepage/manifest.json ${EXTRACTED}
 fi

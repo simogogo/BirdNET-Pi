@@ -44,6 +44,22 @@ http:// ${BIRDNETPI_URL} {
 
   @api-rewrite path_regexp api ^/api/v2(.*)
   rewrite @api-rewrite scripts/api_v2.php/{re.api.1}
+
+  @gzip {
+    header Accept-Encoding *gzip*
+      file {
+        try_files {path}.gz
+      }
+    }
+
+   handle /main.dart.js {
+    file_server
+    header Content-Type text/javascript
+    handle @gzip {
+      header Content-Encoding gzip
+      rewrite {path}.gz
+    }
+  }
 }
 EOF
 else
