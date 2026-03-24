@@ -47,3 +47,10 @@ HUMAN.txt
 include_species_list.txt
 whitelist_species_list.txt
 /nbproject/private/
+model/labels_lang.txt
+model/labels.txt.old
+model/labels_flickr.txt
+homepage/index.html
+model/labels_nm.zip
+model/labels_l18n.zip
+.htaccess
