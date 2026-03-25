@@ -2112,7 +2112,7 @@ function handle_export($method, $id)
             $home = get_home() ?: __ROOT__;
             $extractedDir = "$home/BirdSongs/Extracted";
         }
-        $zipDir = $extractedDir . "/eBirdZips";
+        $zipDir = $extractedDir . "/exportsZip";
         if (!is_dir($zipDir)) @mkdir($zipDir, 0777, true);
         
         $audioDir = "{$extractedDir}/By_Date/{$date}";
