@@ -142,6 +142,9 @@ try {
         case 'ebird':
             handle_ebird($method, $id);
             break;
+        case 'export':
+            handle_export($method, $id);
+            break;
         case 'auth':
             handle_auth($method, $id);
             break;
@@ -2057,60 +2060,242 @@ function handle_ebird($method, $id)
             json_error('No files to zip', 400);
 
         $config = get_config();
-        $extractedDir = isset($config['EXTRACTED']) ? rtrim($config['EXTRACTED'], '/') : (__ROOT__ . "/Extracted");
-
-        $zipFileName = "eBird_Export_{$date}.zip";
-        $realZipDir = $extractedDir . "/eBirdZips";
-        $webZipDir = "/eBirdZips";
-
-        if (!file_exists($realZipDir))
-            @mkdir($realZipDir, 0777, true);
-        $finalZipPath = "{$realZipDir}/{$zipFileName}";
-
-        $zip = new ZipArchive();
-        if ($zip->open($finalZipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
-            json_error('Cannot create zip file', 500);
+        if (isset($config['EXTRACTED']) && !empty($config['EXTRACTED'])) {
+            $extractedDir = rtrim($config['EXTRACTED'], '/');
+        } else {
+            $home = get_home() ?: __ROOT__;
+            $extractedDir = "$home/BirdSongs/Extracted";
         }
+        $zipDir = $extractedDir . "/eBirdZips";
+        if (!is_dir($zipDir)) @mkdir($zipDir, 0777, true);
 
-        $home = get_home() ?: __ROOT__;
-        $audioDir = "{$home}/BirdSongs/Extracted/By_Date/{$date}";
+        // Include date in batchId so it's easily extractable from filename
+        $batchId = "{$date}_" . time() . "_" . bin2hex(random_bytes(4));
+        $batchFile = "{$zipDir}/batch_{$batchId}.json";
+        file_put_contents($batchFile, json_encode($files));
 
-        $addedFiles = 0;
-        foreach ($files as $item) {
-            $filename = $item['filename'] ?? '';
-            $species = $item['species'] ?? 'Unknown_Species';
-            $safeSpecies = preg_replace('/[^a-zA-Z0-9_ -]/', '_', $species);
+        $statusFile = "{$zipDir}/eBird_Export_{$batchId}.status";
+        file_put_contents($statusFile, json_encode([
+            'status' => 'processing',
+            'date' => $date,
+            'type' => 'ebird',
+            'batch_id' => $batchId,
+            'timestamp' => time()
+        ]));
 
-            $sourcePath = "{$audioDir}/{$safeSpecies}/{$filename}";
-            if (file_exists($sourcePath)) {
-                $zip->addFile($sourcePath, "{$safeSpecies}/{$filename}");
-                $addedFiles++;
-            }
-            else {
-                $flatSourcePath = "{$audioDir}/{$filename}";
-                if (file_exists($flatSourcePath)) {
-                    $zip->addFile($flatSourcePath, "{$safeSpecies}/{$filename}");
-                    $addedFiles++;
-                }
-            }
-        }
-        $zip->close();
-
-        if ($addedFiles === 0) {
-            if (file_exists($finalZipPath))
-                @unlink($finalZipPath);
-            json_error('Nessun file audio originale trovato da inserire nello zip', 404);
-        }
-
-        $downloadUrl = "{$webZipDir}/{$zipFileName}";
+        $scriptPath = __ROOT__ . '/scripts/export_zip_async.php';
+        shell_exec("nohup php {$scriptPath} " . escapeshellarg($date) . " " . escapeshellarg($batchId) . " > /dev/null 2>&1 &");
 
         json_success([
-            'download_url' => $downloadUrl,
-            'files_zipped' => $addedFiles
+            'message' => 'Esportazione eBird avviata in background.',
+            'batch_id' => $batchId
         ]);
     }
 
     json_error('Endpoint ebird non trovato o metodo non supportato', 404);
+}
+
+// EXPORT
+function handle_export($method, $id)
+{
+    if ($method === 'POST' && $id === 'zip') {
+        $body = get_json_body();
+        $date = $body['date'] ?? '';
+        if (!$date || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            json_error('Data mancante o nel formato errato (YYYY-MM-DD)', 400);
+        }
+        $config = get_config();
+        if (isset($config['EXTRACTED']) && !empty($config['EXTRACTED'])) {
+            $extractedDir = rtrim($config['EXTRACTED'], '/');
+        } else {
+            $home = get_home() ?: __ROOT__;
+            $extractedDir = "$home/BirdSongs/Extracted";
+        }
+        $zipDir = $extractedDir . "/eBirdZips";
+        if (!is_dir($zipDir)) @mkdir($zipDir, 0777, true);
+        
+        $audioDir = "{$extractedDir}/By_Date/{$date}";
+        if (!is_dir($audioDir)) {
+            json_error('Nessuna registrazione trovata per la data selezionata', 404);
+        }
+        
+        $statusFile = "{$zipDir}/export_{$date}.status";
+        if (file_exists($statusFile)) {
+            $currentStatus = json_decode(file_get_contents($statusFile), true);
+            if ($currentStatus && $currentStatus['status'] === 'processing') {
+                json_success(['message' => 'Un\'esportazione per questa data è già in corso.']);
+            }
+        }
+        
+        file_put_contents($statusFile, json_encode(['status' => 'processing', 'date' => $date, 'timestamp' => time()]));
+        
+        $scriptPath = __ROOT__ . '/scripts/export_zip_async.php';
+        shell_exec("nohup php {$scriptPath} " . escapeshellarg($date) . " > /dev/null 2>&1 &");
+        
+        json_success(['message' => 'Esportazione avviata in background.']);
+    }
+
+    if ($method === 'GET' && $id === 'csv') {
+        $db = get_db();
+        $from_date = $_GET['from_date'] ?? null;
+        $to_date = $_GET['to_date'] ?? null;
+        $species = $_GET['species'] ?? null;
+
+        $where = [];
+        $params = [];
+
+        if ($from_date && $to_date) {
+            $where[] = "Date BETWEEN :from_date AND :to_date";
+            $params[':from_date'] = $from_date;
+            $params[':to_date'] = $to_date;
+        } elseif ($from_date) {
+            $where[] = "Date >= :from_date";
+            $params[':from_date'] = $from_date;
+        }
+
+        if ($species) {
+            $spList = explode(',', $species);
+            $inClause = [];
+            foreach ($spList as $i => $sp) {
+                $p = ":sp_$i";
+                $inClause[] = $p;
+                $params[$p] = trim($sp);
+            }
+            if (count($inClause) > 0) {
+                $where[] = "Sci_Name IN (" . implode(',', $inClause) . ")";
+            }
+        }
+
+        $whereStr = count($where) > 0 ? implode(' AND ', $where) : '1=1';
+        $stmt = $db->prepare("SELECT Date, Time, Sci_Name, Com_Name, Confidence, Lat, Lon, Cutoff FROM detections WHERE $whereStr ORDER BY Date ASC, Time ASC");
+        foreach ($params as $k => $v) {
+            $stmt->bindValue($k, $v);
+        }
+        ensure_db_ok($stmt);
+
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="BirdNET_Export_' . date('Ymd_His') . '.csv"');
+        
+        $output = fopen('php://output', 'w');
+        fputcsv($output, ['Date', 'Time', 'Sci_Name', 'Com_Name', 'Confidence', 'Lat', 'Lon', 'Cutoff']);
+        
+        $result = $stmt->execute();
+        while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+            fputcsv($output, [
+                $row['Date'],
+                $row['Time'],
+                $row['Sci_Name'],
+                $row['Com_Name'],
+                $row['Confidence'],
+                $row['Lat'],
+                $row['Lon'],
+                $row['Cutoff']
+            ]);
+        }
+        fclose($output);
+        exit;
+    }
+
+    if ($method === 'GET' && $id === 'zip') {
+        $config = get_config();
+        $extractedDir = rtrim($config['EXTRACTED'] ?? (__ROOT__ . "/Extracted"), '/');
+        $zipDir = $extractedDir . "/eBirdZips";
+        $webDir = "/eBirdZips";
+        
+        $results = [];
+        if (is_dir($zipDir)) {
+            $files = scandir($zipDir);
+            foreach ($files as $f) {
+                if ($f === '.' || $f === '..') continue;
+                if (str_ends_with($f, '.status')) {
+                    $item = json_decode(file_get_contents("{$zipDir}/{$f}"), true);
+                    if ($item && $item['status'] === 'processing') {
+                        $results[] = [
+                            'filename' => '',
+                            'date' => $item['date'] ?? '',
+                            'status' => 'processing',
+                            'timestamp' => (int)($item['timestamp'] ?? 0),
+                            'size' => 0,
+                            'url' => ''
+                        ];
+                    }
+                } elseif (str_ends_with($f, '.zip')) {
+                    if (str_starts_with($f, 'Daily_Export_') || str_starts_with($f, 'eBird_Export_')) {
+                        // Extract YYYY-MM-DD from filename
+                        preg_match('/(\d{4}-\d{2}-\d{2})/', $f, $matches);
+                        $dateStr = $matches[1] ?? '';
+                        
+                        // If it's an eBird export without date in standard position, 
+                        // we might need to be more flexible, but with our new naming it should work.
+                        
+                        // Check if a corresponding .status file says it's completed (optional, usually if .zip exists it is completed)
+                        $statusName = str_replace('.zip', '.status', $f);
+                        if (!str_starts_with($statusName, 'export_') && !str_starts_with($statusName, 'eBird_Export_')) {
+                             // Fallback for old Daily Exports if needed, but they are usually export_YYYY-MM-DD.status
+                        }
+
+                        if ($dateStr) {
+                            $results[] = [
+                                'filename' => $f,
+                                'date' => $dateStr,
+                                'status' => 'completed',
+                                'timestamp' => filemtime("{$zipDir}/{$f}"),
+                                'size' => filesize("{$zipDir}/{$f}"),
+                                'url' => "{$webDir}/{$f}"
+                            ];
+                        }
+                    }
+                }
+            }
+        }
+        
+        usort($results, function($a, $b) {
+            return $b['timestamp'] - $a['timestamp'];
+        });
+        
+        json_success(['zips' => $results]);
+    }
+
+    if ($method === 'DELETE' && $id === 'zip') {
+        $body = get_json_body();
+        $filename = $body['filename'] ?? $_GET['filename'] ?? '';
+        $filename = preg_replace('/[^a-zA-Z0-9_\-\.]/', '', $filename);
+        if (empty($filename)) {
+             json_error('Filename non specificato', 400);
+        }
+        
+        $config = get_config();
+        $extractedDir = rtrim($config['EXTRACTED'] ?? (__ROOT__ . "/Extracted"), '/');
+        $zipDir = $extractedDir . "/eBirdZips";
+        $filePath = "{$zipDir}/{$filename}";
+        
+        if (file_exists($filePath)) {
+            @unlink($filePath);
+        }
+        
+        // Delete corresponding status file
+        $statusPath = str_replace('.zip', '.status', $filePath);
+        if (file_exists($statusPath)) {
+            $statusData = json_decode(file_get_contents($statusPath), true);
+            // Only delete if it's NOT still processing (safety)
+            if (!$statusData || (isset($statusData['status']) && $statusData['status'] !== 'processing')) {
+                @unlink($statusPath);
+            }
+        }
+        
+        // Fallback for old naming if needed
+        preg_match('/(\d{4}-\d{2}-\d{2})/', $filename, $matches);
+        if (isset($matches[1])) {
+            $oldStatusPath = "{$zipDir}/export_{$matches[1]}.status";
+            if (file_exists($oldStatusPath) && $oldStatusPath !== $statusPath) {
+                @unlink($oldStatusPath);
+            }
+        }
+        
+        json_success(['message' => 'Zip eliminato correttamente']);
+    }
+
+    json_error('Endpoint export non trovato o metodo non supportato', 404);
 }
 
 // LOGS
