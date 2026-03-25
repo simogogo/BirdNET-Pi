@@ -18,11 +18,12 @@ $config = get_config();
 
 if (isset($config['EXTRACTED']) && !empty($config['EXTRACTED'])) {
     $extractedDir = rtrim($config['EXTRACTED'], '/');
-} else {
+}
+else {
     $home = get_home() ?: $root;
     $extractedDir = "{$home}/BirdSongs/Extracted";
 }
-$zipDir = "{$extractedDir}/eBirdZips";
+$zipDir = "{$extractedDir}/exportsZip";
 
 if (!is_dir($zipDir)) {
     @mkdir($zipDir, 0777, true);
@@ -63,7 +64,8 @@ if ($batchId && file_exists($batchFile)) {
             if (file_exists($sourcePath)) {
                 $zip->addFile($sourcePath, "{$safeSpecies}/{$filename}");
                 $addedFiles++;
-            } else {
+            }
+            else {
                 $flatSourcePath = "{$audioDir}/{$filename}";
                 if (file_exists($flatSourcePath)) {
                     $zip->addFile($flatSourcePath, "{$safeSpecies}/{$filename}");
@@ -72,17 +74,20 @@ if ($batchId && file_exists($batchFile)) {
             }
         }
     }
-} else {
+}
+else {
     // Standard full day export logic
     if (is_dir($audioDir)) {
         $speciesDirs = scandir($audioDir);
         foreach ($speciesDirs as $species) {
-            if ($species === '.' || $species === '..') continue;
+            if ($species === '.' || $species === '..')
+                continue;
             $speciesPath = "{$audioDir}/{$species}";
             if (is_dir($speciesPath)) {
                 $files = scandir($speciesPath);
                 foreach ($files as $file) {
-                    if ($file === '.' || $file === '..') continue;
+                    if ($file === '.' || $file === '..')
+                        continue;
                     if (str_ends_with($file, '.wav') || str_ends_with($file, '.flac') || str_ends_with($file, '.mp3')) {
                         $zip->addFile("{$speciesPath}/{$file}", "{$species}/{$file}");
                         $addedFiles++;
@@ -98,7 +103,8 @@ $zip->close();
 if ($addedFiles === 0) {
     @unlink($finalZipPath);
     file_put_contents($statusFile, json_encode(['status' => 'error', 'error' => 'No audio files found', 'date' => $date, 'timestamp' => time()]));
-} else {
+}
+else {
     file_put_contents($statusFile, json_encode(['status' => 'completed', 'filename' => $zipFileName, 'date' => $date, 'timestamp' => time()]));
 }
 

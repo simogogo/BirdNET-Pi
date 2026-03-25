@@ -2066,7 +2066,8 @@ function handle_ebird($method, $id)
             $home = get_home() ?: __ROOT__;
             $extractedDir = "$home/BirdSongs/Extracted";
         }
-        $zipDir = $extractedDir . "/eBirdZips";
+        $zipDir = $extractedDir . "/exportsZip";
+
         if (!is_dir($zipDir)) @mkdir($zipDir, 0777, true);
 
         // Include date in batchId so it's easily extractable from filename
@@ -2199,9 +2200,9 @@ function handle_export($method, $id)
     if ($method === 'GET' && $id === 'zip') {
         $config = get_config();
         $extractedDir = rtrim($config['EXTRACTED'] ?? (__ROOT__ . "/Extracted"), '/');
-        $zipDir = $extractedDir . "/eBirdZips";
-        $webDir = "/eBirdZips";
-        
+        $zipDir = $extractedDir . "/exportsZip";
+        $webDir = "/exportsZip";
+
         $results = [];
         if (is_dir($zipDir)) {
             $files = scandir($zipDir);
@@ -2266,7 +2267,7 @@ function handle_export($method, $id)
         
         $config = get_config();
         $extractedDir = rtrim($config['EXTRACTED'] ?? (__ROOT__ . "/Extracted"), '/');
-        $zipDir = $extractedDir . "/eBirdZips";
+        $zipDir = $extractedDir . "/exportsZip";
         $filePath = "{$zipDir}/{$filename}";
         
         if (file_exists($filePath)) {
