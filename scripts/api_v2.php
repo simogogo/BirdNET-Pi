@@ -2006,7 +2006,7 @@ function handle_ebird($method, $id)
             FROM detections
             WHERE Date = :date AND Sci_Name NOT IN ('Human vocal', 'Human non-vocal', 'Human whistle', 'Dog', 'Power tools', 'Siren', 'Engine', 'Gun', 'Fireworks')
             AND Confidence >= 0.7
-            ORDER BY Time ASC, Confidence DESC
+            ORDER BY SUBSTR(Time, 1, 2) ASC, Confidence DESC, Time ASC
         ";
         $stmt = $db->prepare($query);
         $stmt->bindValue(':date', $date, SQLITE3_TEXT);
