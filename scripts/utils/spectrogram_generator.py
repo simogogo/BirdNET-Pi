@@ -159,7 +159,9 @@ def update_daily_spectrogram(audio_path, conf):
         # Load audio chunk
         y, sr = librosa.load(audio_path, sr=AUDIO_SR, mono=True)
         # Generate spectrogram
-        S = np.abs(librosa.stft(y, n_fft=FREQ_BINS*2-1, hop_length=HOP_LENGTH))
+        # To get exactly FREQ_BINS from stft, n_fft should be 2 * (FREQ_BINS - 1)
+        n_fft = 2 * (FREQ_BINS - 1)
+        S = np.abs(librosa.stft(y, n_fft=n_fft, hop_length=HOP_LENGTH))
         
         # Trim S to exactly FREQ_BINS if needed
         S = S[:FREQ_BINS, :]
@@ -238,7 +240,7 @@ def render_daily_image(conf):
                 # Flip: low frequencies at bottom
                 rgba = np.flipud(rgba)
 
-                png_path = _get_daily_png_path(date_str, 'standard')
+                png_path = _get_daily_png_path(date_str, 'standard', conf)
                 plt.imsave(png_path, rgba)
                 del arr
 
@@ -251,7 +253,7 @@ def render_daily_image(conf):
                 plot_arr = np.clip(arr, 0.0, 1.0)
                 plot_arr = np.flipud(plot_arr)
 
-                png_path = _get_daily_png_path(date_str, 'indices')
+                png_path = _get_daily_png_path(date_str, 'indices', conf)
                 plt.imsave(png_path, plot_arr)
                 del arr
                 
