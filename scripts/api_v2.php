@@ -881,6 +881,11 @@ function handle_charts($type)
                         ? rtrim($config['EXTRACTED'], '/') 
                         : "$home/BirdSongs/Extracted";
         
+        // Ensure absolute path
+        if (!empty($extractedDir) && $extractedDir[0] !== '/' && strpos($extractedDir, ':') === false) {
+            $extractedDir = __ROOT__ . '/' . $extractedDir;
+        }
+
         $ldfcs_std = "$extractedDir/LongSpectrograms/daily_standard_$date.png";
         $ldfcs_ind = "$extractedDir/LongSpectrograms/daily_indices_$date.png";
 
@@ -1168,7 +1173,7 @@ function handle_report($type)
     }
     // --------------------------------
 
-    json_success([
+    $response = [
         'period_start' => $thisPeriodStart,
         'period_end' => $thisPeriodEnd,
         'total_detections' => $totalThisWeek,
@@ -1183,7 +1188,28 @@ function handle_report($type)
         'daily_trend' => $daily_trend,
         'daily_hourly' => $daily_hourly,
         'sun_info' => $sun_info
-    ]);
+    ];
+
+    // Added for Daily LDFCS
+    if ($type === 'daily') {
+        $home = get_home();
+        $config = get_config();
+        $extractedDir = (isset($config['EXTRACTED']) && !empty($config['EXTRACTED'])) 
+                        ? rtrim($config['EXTRACTED'], '/') 
+                        : "$home/BirdSongs/Extracted";
+        
+        if (!empty($extractedDir) && $extractedDir[0] !== '/' && strpos($extractedDir, ':') === false) {
+            $extractedDir = __ROOT__ . '/' . $extractedDir;
+        }
+
+        $ldfcs_std = "$extractedDir/LongSpectrograms/daily_standard_$thisPeriodStart.png";
+        $ldfcs_ind = "$extractedDir/LongSpectrograms/daily_indices_$thisPeriodStart.png";
+
+        $response['ldfcs_standard_available'] = file_exists($ldfcs_std);
+        $response['ldfcs_indices_available'] = file_exists($ldfcs_ind);
+    }
+
+    json_success($response);
 }
 
 //  SERVE CHART (IMAGE)
@@ -1207,6 +1233,11 @@ function handle_serve_chart($filename)
     $extractedDir = (isset($config['EXTRACTED']) && !empty($config['EXTRACTED'])) 
                     ? rtrim($config['EXTRACTED'], '/') 
                     : "$home/BirdSongs/Extracted";
+
+    // Ensure absolute path
+    if (!empty($extractedDir) && $extractedDir[0] !== '/' && strpos($extractedDir, ':') === false) {
+        $extractedDir = __ROOT__ . '/' . $extractedDir;
+    }
 
     $chartPath1 = "$home/BirdSongs/Extracted/Charts/$filename";
     $chartPath2 = __ROOT__ . "/Charts/$filename";
