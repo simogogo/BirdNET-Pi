@@ -19,8 +19,8 @@ def _get_ldfcs_dir(conf):
     os.makedirs(ldfcs_dir, exist_ok=True)
     return ldfcs_dir
 
-FREQ_BINS = 1024
-AUDIO_SR = 48000
+FREQ_BINS = 512
+AUDIO_SR = 24000
 HOP_LENGTH = 512
 
 def _get_daily_memmap_path(date_str, type_str, conf):
