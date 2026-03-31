@@ -1522,7 +1522,7 @@ function handle_config($method, $id = null)
             $should_quote = in_array($key, [
                 'SITE_NAME', 'APPRISE_NOTIFICATION_TITLE', 'APPRISE_NOTIFICATION_BODY', 
                 'APPRISE_ONLY_NOTIFY_SPECIES_NAMES', 'APPRISE_ONLY_NOTIFY_SPECIES_NAMES_2',
-                'CUSTOM_IMAGE_TITLE', 'BIRDNETPI_URL', 'APPRISE'
+                'CUSTOM_IMAGE_TITLE', 'BIRDNETPI_URL', 'APPRISE', 'RTSP_STREAM'
             ]) || (strpos((string)$value, ' ') !== false);
 
             // Salvataggio nel file di configurazione con regex robusta (case-insensitive per il key)
