@@ -12,7 +12,7 @@ import inotify.adapters
 from inotify.constants import IN_CLOSE_WRITE
 
 from utils.analysis import load_global_model, run_analysis
-from utils.helpers import get_settings, get_wav_files, ANALYZING_NOW
+from utils.helpers import get_settings, get_wav_files, ANALYZING_NOW, _ensure_dir_for_file
 from utils.classes import ParseFileName
 from utils.reporting import extract_detection, summary, write_to_file, write_to_db, apprise, bird_weather, heartbeat, \
     update_json_file
@@ -37,8 +37,10 @@ def sig_handler(sig_num, curr_stack_frame):
 def main():
     load_global_model()
     conf = get_settings()
+    stream_data_dir = os.path.join(conf['RECS_DIR'], 'StreamData')
+    os.makedirs(stream_data_dir, exist_ok=True)
     i = inotify.adapters.Inotify()
-    i.add_watch(os.path.join(conf['RECS_DIR'], 'StreamData'), mask=IN_CLOSE_WRITE)
+    i.add_watch(stream_data_dir, mask=IN_CLOSE_WRITE)
 
     backlog = get_wav_files()
 
@@ -92,6 +94,7 @@ def process_file(file_name, report_queue):
             os.remove(file_name)
             return
         log.info('Analyzing %s', file_name)
+        _ensure_dir_for_file(ANALYZING_NOW)
         with open(ANALYZING_NOW, 'w') as analyzing:
             analyzing.write(file_name)
         file = ParseFileName(file_name)

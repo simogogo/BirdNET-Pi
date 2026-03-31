@@ -40,10 +40,25 @@ class PHPConfigParser(ConfigParser):
             return value.strip('"')
 
 
+def _ensure_dir_for_file(filepath):
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+
+
 def _load_settings(settings_path='/etc/birdnet/birdnet.conf', force_reload=False):
     global _settings
     if _settings is None or force_reload:
-        with open(settings_path) as f:
+        # Development fallback: if system config missing, check project root
+        actual_path = settings_path
+        if not os.path.exists(actual_path):
+            local_conf = os.path.join(BASE_PATH, 'birdnet.conf')
+            if os.path.exists(local_conf):
+                actual_path = local_conf
+            else:
+                # If both are missing, we might need a default config or throw a clearer error
+                # For now, it will throw FileNotFoundError as before but we looked locally
+                pass
+
+        with open(actual_path) as f:
             parser = PHPConfigParser(interpolation=None)
             # preserve case
             parser.optionxform = lambda option: option
