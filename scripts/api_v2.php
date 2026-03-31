@@ -14,7 +14,6 @@ if (!defined('__ROOT__')) {
     define('__ROOT__', dirname(__DIR__));
 }
 require_once(__ROOT__ . '/scripts/common.php');
-session_write_close();
 //  CORS & Headers
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
@@ -1163,7 +1162,7 @@ function handle_report($type)
             $hourlyWeather[$h] = [
                 'temp' => $tempC,
                 'wind' => $wrow['WindSpeed'] ?? null,
-                'wind_deg' => $wrow['WindDirection'] ?? null, // <--- Injection
+                'wind_deg' => $wrow['WindDirection'] ?? null,
                 'condition' => $condDesc,
                 'isday' => isset($wrow['IsDay']) ? (int)$wrow['IsDay'] : (isset($wrow['isday']) ? (int)$wrow['isday'] : 1)
             ];
