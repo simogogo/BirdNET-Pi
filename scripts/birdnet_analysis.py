@@ -12,7 +12,7 @@ import inotify.adapters
 from inotify.constants import IN_CLOSE_WRITE
 
 from utils.analysis import load_global_model, run_analysis
-from utils.helpers import get_settings, get_wav_files, ANALYZING_NOW, _ensure_dir_for_file
+from utils.helpers import get_settings, get_wav_files, _get_analyzing_now_path, _ensure_dir_for_file
 from utils.classes import ParseFileName
 from utils.reporting import extract_detection, summary, write_to_file, write_to_db, apprise, bird_weather, heartbeat, \
     update_json_file
@@ -94,8 +94,10 @@ def process_file(file_name, report_queue):
             os.remove(file_name)
             return
         log.info('Analyzing %s', file_name)
-        _ensure_dir_for_file(ANALYZING_NOW)
-        with open(ANALYZING_NOW, 'w') as analyzing:
+        conf = get_settings()
+        analyzing_now = _get_analyzing_now_path(conf)
+        _ensure_dir_for_file(analyzing_now)
+        with open(analyzing_now, 'w') as analyzing:
             analyzing.write(file_name)
         file = ParseFileName(file_name)
         detections = run_analysis(file)

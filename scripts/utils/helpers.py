@@ -40,8 +40,14 @@ class PHPConfigParser(ConfigParser):
             return value.strip('"')
 
 
+def _get_analyzing_now_path(conf):
+    recs_dir = conf.get('RECS_DIR', os.path.expanduser('~/BirdSongs'))
+    return os.path.join(recs_dir, 'StreamData/analyzing_now.txt')
+
+
 def _ensure_dir_for_file(filepath):
-    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    if filepath:
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
 
 
 def _load_settings(settings_path='/etc/birdnet/birdnet.conf', force_reload=False):

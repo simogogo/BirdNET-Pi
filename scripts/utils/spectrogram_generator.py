@@ -8,22 +8,28 @@ from utils.helpers import get_settings
 
 log = logging.getLogger('spectrogram_generator')
 
-# Load configuration to get the customized EXTRACTED path if it exists
-conf = get_settings()
-_extracted_base = conf.get('EXTRACTED', os.path.expanduser('~/BirdSongs/Extracted'))
-LDFCS_DIR = os.path.join(_extracted_base, 'LongSpectrograms')
+def _get_ldfcs_dir(conf):
+    # Try EXTRACTED first, then fallback to RECS_DIR/Extracted
+    extracted_base = conf.get('EXTRACTED')
+    if not extracted_base:
+        recs_dir = conf.get('RECS_DIR', os.path.expanduser('~/BirdSongs'))
+        extracted_base = os.path.join(recs_dir, 'Extracted')
+    
+    ldfcs_dir = os.path.join(extracted_base, 'LongSpectrograms')
+    os.makedirs(ldfcs_dir, exist_ok=True)
+    return ldfcs_dir
 
 FREQ_BINS = 1024
 AUDIO_SR = 48000
 HOP_LENGTH = 512
 
-def _get_daily_memmap_path(date_str, type_str):
-    if not os.path.exists(LDFCS_DIR):
-        os.makedirs(LDFCS_DIR, exist_ok=True)
-    return os.path.join(LDFCS_DIR, f'daily_{type_str}_{date_str}.dat')
+def _get_daily_memmap_path(date_str, type_str, conf):
+    ldfcs_dir = _get_ldfcs_dir(conf)
+    return os.path.join(ldfcs_dir, f'daily_{type_str}_{date_str}.dat')
 
-def _get_daily_png_path(date_str, type_str):
-    return os.path.join(LDFCS_DIR, f'daily_{type_str}_{date_str}.png')
+def _get_daily_png_path(date_str, type_str, conf):
+    ldfcs_dir = _get_ldfcs_dir(conf)
+    return os.path.join(ldfcs_dir, f'daily_{type_str}_{date_str}.png')
 
 def _get_total_cols(recording_length):
     # Number of segments in 24 hours
@@ -132,12 +138,12 @@ def update_daily_spectrogram(audio_path, conf):
         # Or parse the exact time from the filename "YYYY-MM-DD-birdnet-HH:MM:SS.wav"
         basename = os.path.basename(audio_path)
         
-        # Example: 2024-02-24-birdnet-16:19:37.wav
+        # Example: 2024-02-24-birdnet-16:19:37.wav or 2024-02-24-birdnet-RTSP_1-16:19:37.wav
         import re
-        match = re.search(r'(\d{4}-\d{2}-\d{2})-.*?(\d{2}:\d{2}:\d{2})', basename)
+        match = re.search(r'(\d{4}-\d{2}-\d{2}).*?(\d{2}[:_]\d{2}[:_]\d{2})', basename)
         if match:
             date_str = match.group(1)
-            time_str = match.group(2)
+            time_str = match.group(2).replace('_', ':')
             timestamp = datetime.datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M:%S")
         else:
             # Fallback
@@ -161,7 +167,7 @@ def update_daily_spectrogram(audio_path, conf):
         if generate_standard == 1:
             # shape: (FREQ_BINS, 2) — channel 0 = dB, channel 1 = alpha
             std_col = calculate_standard_col(S)
-            mem_path = _get_daily_memmap_path(date_str, 'standard')
+            mem_path = _get_daily_memmap_path(date_str, 'standard', conf)
 
             if not os.path.exists(mem_path):
                 arr = np.memmap(mem_path, dtype='float32', mode='w+', shape=(FREQ_BINS, total_cols, 2))
@@ -176,7 +182,7 @@ def update_daily_spectrogram(audio_path, conf):
         if generate_indices == 1:
             # shape: (FREQ_BINS, 4) — RGBA channels
             idx_col = calculate_acoustic_indices(S)
-            mem_path = _get_daily_memmap_path(date_str, 'indices')
+            mem_path = _get_daily_memmap_path(date_str, 'indices', conf)
 
             # RGBA shape (FREQ_BINS, total_cols, 4)
             if not os.path.exists(mem_path):
@@ -206,7 +212,7 @@ def render_daily_image(conf):
         total_cols = _get_total_cols(recording_length)
         
         if generate_standard == 1:
-            mem_path = _get_daily_memmap_path(date_str, 'standard')
+            mem_path = _get_daily_memmap_path(date_str, 'standard', conf)
             if os.path.exists(mem_path):
                 arr = np.memmap(mem_path, dtype='float32', mode='r', shape=(FREQ_BINS, total_cols, 2))
 
@@ -237,7 +243,7 @@ def render_daily_image(conf):
                 del arr
 
         if generate_indices == 1:
-            mem_path = _get_daily_memmap_path(date_str, 'indices')
+            mem_path = _get_daily_memmap_path(date_str, 'indices', conf)
             if os.path.exists(mem_path):
                 arr = np.memmap(mem_path, dtype='float32', mode='r', shape=(FREQ_BINS, total_cols, 4))
 
