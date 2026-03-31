@@ -901,6 +901,8 @@ function handle_charts($type)
             'chart2_available' => file_exists($chart2),
             'ldfcs_standard_available' => file_exists($ldfcs_std),
             'ldfcs_indices_available' => file_exists($ldfcs_ind),
+            'ldfcs_standard_file' => file_exists($ldfcs_std) ? basename($ldfcs_std) : null,
+            'ldfcs_indices_file' => file_exists($ldfcs_ind) ? basename($ldfcs_ind) : null,
         ]);
     }
 
@@ -1207,6 +1209,8 @@ function handle_report($type)
 
         $response['ldfcs_standard_available'] = file_exists($ldfcs_std);
         $response['ldfcs_indices_available'] = file_exists($ldfcs_ind);
+        $response['ldfcs_standard_file'] = file_exists($ldfcs_std) ? basename($ldfcs_std) : null;
+        $response['ldfcs_indices_file'] = file_exists($ldfcs_ind) ? basename($ldfcs_ind) : null;
     }
 
     json_success($response);
