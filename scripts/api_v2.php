@@ -14,6 +14,7 @@ if (!defined('__ROOT__')) {
     define('__ROOT__', dirname(__DIR__));
 }
 require_once(__ROOT__ . '/scripts/common.php');
+
 //  CORS & Headers
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
@@ -79,6 +80,12 @@ $resource = $segments[0] ?? '';
 $id = $segments[1] ?? null;
 $action = $segments[2] ?? null;
 
+// Optimization: release the session file lock for all non-writing endpoints.
+// This significantly speeds up concurrent requests from the frontend.
+if (!in_array($resource, ['auth', 'config'])) {
+    session_write_close();
+}
+
 try {
     switch ($resource) {
         case 'overview':
@@ -134,8 +141,7 @@ try {
         case 'stream':
             if ($id === 'detections') {
                 handle_stream_detections();
-            }
-            else {
+            } else {
                 handle_stream_info();
             }
             break;
@@ -158,8 +164,7 @@ try {
         default:
             json_error('Endpoint non trovato: /api/v2/' . $resource, 404);
     }
-}
-catch (Exception $e) {
+} catch (Exception $e) {
     json_error('Errore interno: ' . $e->getMessage(), 500);
 }
 
@@ -183,8 +188,7 @@ function handle_auth($method, $action)
         if ($username === $validUser && ($validPass === '' || $password === $validPass)) {
             $_SESSION['my_authenticated'] = true;
             json_success(['authenticated' => true]);
-        }
-        else {
+        } else {
             json_error('Credenziali non valide', 401);
         }
     }
@@ -221,11 +225,11 @@ function handle_overview()
     }
 
     json_success([
-        'total_detections' => (int)$summary['totalcount'],
-        'today_detections' => (int)$summary['todaycount'],
-        'hour_detections' => (int)$summary['hourcount'],
-        'today_species' => (int)$summary['speciestally'],
-        'total_species' => (int)$summary['totalspeciestally'],
+        'total_detections' => (int) $summary['totalcount'],
+        'today_detections' => (int) $summary['todaycount'],
+        'hour_detections' => (int) $summary['hourcount'],
+        'today_species' => (int) $summary['speciestally'],
+        'total_species' => (int) $summary['totalspeciestally'],
         'most_recent' => $latest ?: null,
         'top_species_today' => $topSpecies,
     ]);
@@ -307,7 +311,7 @@ function handle_detections($method, $id)
     json_success([
         'date' => $date,
         'detections' => $detections,
-        'total' => (int)$total,
+        'total' => (int) $total,
         'limit' => $limit,
         'offset' => $offset,
     ]);
@@ -347,7 +351,7 @@ function handle_species($method, $id, $action)
             json_error('Specie non trovata', 404);
         }
 
-        $info['detection_count'] = (int)$info['detection_count'];
+        $info['detection_count'] = (int) $info['detection_count'];
         $info['max_confidence'] = floatval($info['max_confidence']);
         $info['avg_confidence'] = floatval($info['avg_confidence']);
 
@@ -370,7 +374,7 @@ function handle_species($method, $id, $action)
         $trend = [];
         $r3 = $stmt3->execute();
         while ($row = $r3->fetchArray(SQLITE3_ASSOC)) {
-            $trend[] = ['date' => $row['Date'], 'count' => (int)$row['count']];
+            $trend[] = ['date' => $row['Date'], 'count' => (int) $row['count']];
         }
         $info['daily_trend'] = $trend;
 
@@ -379,19 +383,16 @@ function handle_species($method, $id, $action)
         try {
             if ($config["IMAGE_PROVIDER"] === 'NONE' || empty($config["IMAGE_PROVIDER"])) {
                 $info['image'] = null;
-            }
-            else {
+            } else {
                 if ($config["IMAGE_PROVIDER"] === 'FLICKR') {
                     $provider = new Flickr();
-                }
-                else {
+                } else {
                     $provider = new Wikipedia();
                 }
                 $image = $provider->get_image($sci_name);
                 $info['image'] = $image ?: null;
             }
-        }
-        catch (Exception $e) {
+        } catch (Exception $e) {
             $info['image'] = null;
         }
 
@@ -413,7 +414,7 @@ function handle_species($method, $id, $action)
         $species[] = [
             'Com_Name' => $row['Com_Name'],
             'Sci_Name' => $row['Sci_Name'],
-            'Count' => (int)$row['Count'],
+            'Count' => (int) $row['Count'],
             'MaxConfidence' => floatval($row['MaxConfidence']),
             'Date' => $row['Date'],
             'Time' => $row['Time'],
@@ -463,7 +464,7 @@ function handle_species_by_period($method)
             $where[] = "(Time >= :from_time AND Time <= :to_time)";
         }
         $params[':from_time'] = $from_time;
-        $params[':to_time']   = $to_time;
+        $params[':to_time'] = $to_time;
     } elseif ($from_time) {
         $where[] = "Time >= :from_time";
         $params[':from_time'] = $from_time;
@@ -501,7 +502,7 @@ function handle_species_by_period($method)
         $species[] = [
             'Com_Name' => $row['Com_Name'],
             'Sci_Name' => $row['Sci_Name'],
-            'Count' => (int)$row['Count'],
+            'Count' => (int) $row['Count'],
             'MaxConfidence' => floatval($row['MaxConfidence']),
             'Date' => $row['Date'],
             'Time' => $row['Time'],
@@ -545,12 +546,10 @@ function handle_recordings($method, $id, $action)
                 $where[] = "Date BETWEEN :from_date AND :to_date";
                 $params[':from_date'] = $from_date;
                 $params[':to_date'] = $to_date;
-            }
-            elseif ($date) {
+            } elseif ($date) {
                 $where[] = "Date = :date";
                 $params[':date'] = $date;
-            }
-            elseif (!$species) {
+            } elseif (!$species) {
                 // If neither range nor single date nor species is provided, default to today
                 $where[] = "Date = :date";
                 $params[':date'] = date('Y-m-d');
@@ -564,7 +563,7 @@ function handle_recordings($method, $id, $action)
                     $where[] = "(Time BETWEEN :from_time AND :to_time)";
                 }
                 $params[':from_time'] = $from_time;
-                $params[':to_time']   = $to_time;
+                $params[':to_time'] = $to_time;
             }
 
             if ($species) {
@@ -672,7 +671,7 @@ function handle_recordings($method, $id, $action)
             }
 
             json_success([
-                'deleted' => true, 
+                'deleted' => true,
                 'db_rows_affected' => $dbRw->changes(),
                 'file_removed_from_disk' => $fileDeleted
             ]);
@@ -701,12 +700,10 @@ function handle_recordings($method, $id, $action)
                 $cmd = "sudo -u " . escapeshellarg($user) . " " . escapeshellarg($home . "/BirdNET-Pi/scripts/birdnet_changeidentification.sh") . " " . escapeshellarg($fileName) . " " . escapeshellarg($newName) . " log_errors " . escapeshellarg($sciName) . " " . escapeshellarg($date) . " " . escapeshellarg($time) . " 2>&1";
                 if (!exec($cmd, $output)) {
                     json_success(['updated' => true, 'new_name' => $newName]);
-                }
-                else {
+                } else {
                     json_error('Error : ' . implode(", ", $output), 500);
                 }
-            }
-            elseif ($action === 'lock' || isset($body['locked'])) {
+            } elseif ($action === 'lock' || isset($body['locked'])) {
                 // Toggle lock
                 $lock = $body['locked'] ?? true;
                 $stmt = $db->prepare("SELECT Date, Com_Name FROM detections WHERE File_Name = :fn LIMIT 1");
@@ -729,12 +726,10 @@ function handle_recordings($method, $id, $action)
                         fwrite($myfile, $fileRelPath . "\n");
                         fwrite($myfile, $fileRelPath . ".png\n");
                         fclose($myfile);
-                    }
-                    else {
+                    } else {
                         json_error('Unable to open exclude file', 500);
                     }
-                }
-                else {
+                } else {
                     $lines = file($excludeFile);
                     $resultStr = '';
                     foreach ($lines as $line) {
@@ -746,8 +741,7 @@ function handle_recordings($method, $id, $action)
                 }
 
                 json_success(['locked' => $lock]);
-            }
-            else {
+            } else {
                 json_error('Azione non specificata (id o lock)', 400);
             }
             break;
@@ -774,7 +768,7 @@ function handle_charts($type)
         $byHour = [];
         $r = $stmt->execute();
         while ($row = $r->fetchArray(SQLITE3_ASSOC)) {
-            $byHour[] = ['hour' => $row['hour'], 'count' => (int)$row['count']];
+            $byHour[] = ['hour' => $row['hour'], 'count' => (int) $row['count']];
         }
 
         // Species per hour
@@ -785,7 +779,7 @@ function handle_charts($type)
         $speciesByHour = [];
         $r2 = $stmt2->execute();
         while ($row = $r2->fetchArray(SQLITE3_ASSOC)) {
-            $speciesByHour[] = ['hour' => $row['hour'], 'species_count' => (int)$row['species_count']];
+            $speciesByHour[] = ['hour' => $row['hour'], 'species_count' => (int) $row['species_count']];
         }
 
         // Top species for the day
@@ -796,7 +790,7 @@ function handle_charts($type)
         $topSpecies = [];
         $r3 = $stmt3->execute();
         while ($row = $r3->fetchArray(SQLITE3_ASSOC)) {
-            $row['count'] = (int)$row['count'];
+            $row['count'] = (int) $row['count'];
             $row['max_conf'] = floatval($row['max_conf']);
             $topSpecies[] = $row;
         }
@@ -834,38 +828,44 @@ function handle_charts($type)
 
             // Fill with real data
             while ($row = $r5->fetchArray(SQLITE3_ASSOC)) {
-                $h = (int)$row['hour'];
+                $h = (int) $row['hour'];
                 $sciName = $row['Sci_Name'];
                 if (isset($speciesHourlyCounts[$sciName])) {
-                    $speciesHourlyCounts[$sciName]['hours'][$h] = (int)$row['count'];
+                    $speciesHourlyCounts[$sciName]['hours'][$h] = (int) $row['count'];
                 }
             }
         }
-        
+
         // --- HOURLY WEATHER ADDITION ---
         $hourlyWeather = array_fill(0, 24, null);
         $stmt_w = $db->prepare("SELECT Hour, Temp, WindSpeed, WindDirection, ConditionCode, IsDay FROM weather WHERE Date = :date");
         $stmt_w->bindValue(':date', $date);
         $res_w = $stmt_w->execute();
         while ($wrow = $res_w->fetchArray(SQLITE3_ASSOC)) {
-            $h = (int)$wrow['Hour'];
+            $h = (int) $wrow['Hour'];
             $tempC = isset($wrow['Temp']) && $wrow['Temp'] !== '' ? round(($wrow['Temp'] - 32) * 5 / 9, 1) : null;
-            
-            $code = (int)($wrow['ConditionCode'] ?? 0);
+
+            $code = (int) ($wrow['ConditionCode'] ?? 0);
             $condDesc = 'Cloudy';
-            if ($code === 0) $condDesc = 'Clear';
-            else if ($code >= 1 && $code <= 3) $condDesc = 'Cloudy';
-            else if ($code == 45 || $code == 48) $condDesc = 'Fog';
-            else if (($code >= 51 && $code <= 64) || ($code >= 80 && $code <= 82)) $condDesc = 'Rain';
-            else if (($code >= 71 && $code <= 77) || $code == 85 || $code == 86) $condDesc = 'Snow';
-            else if (($code >= 95 && $code <= 99) || ($code >= 65 && $code <= 67)) $condDesc = 'Thunderstorm';
+            if ($code === 0)
+                $condDesc = 'Clear';
+            else if ($code >= 1 && $code <= 3)
+                $condDesc = 'Cloudy';
+            else if ($code == 45 || $code == 48)
+                $condDesc = 'Fog';
+            else if (($code >= 51 && $code <= 64) || ($code >= 80 && $code <= 82))
+                $condDesc = 'Rain';
+            else if (($code >= 71 && $code <= 77) || $code == 85 || $code == 86)
+                $condDesc = 'Snow';
+            else if (($code >= 95 && $code <= 99) || ($code >= 65 && $code <= 67))
+                $condDesc = 'Thunderstorm';
 
             $hourlyWeather[$h] = [
                 'temp' => $tempC,
                 'wind' => $wrow['WindSpeed'] ?? null,
                 'wind_deg' => $wrow['WindDirection'] ?? null,
                 'condition' => $condDesc,
-                'isday' => isset($wrow['IsDay']) ? (int)$wrow['IsDay'] : (isset($wrow['isday']) ? (int)$wrow['isday'] : 1)
+                'isday' => isset($wrow['IsDay']) ? (int) $wrow['IsDay'] : (isset($wrow['isday']) ? (int) $wrow['isday'] : 1)
             ];
         }
 
@@ -878,10 +878,10 @@ function handle_charts($type)
 
         // LDFCS charts (if they exist)
         $config = get_config();
-        $extractedDir = (isset($config['EXTRACTED']) && !empty($config['EXTRACTED'])) 
-                        ? rtrim($config['EXTRACTED'], '/') 
-                        : "$home/BirdSongs/Extracted";
-        
+        $extractedDir = (isset($config['EXTRACTED']) && !empty($config['EXTRACTED']))
+            ? rtrim($config['EXTRACTED'], '/')
+            : "$home/BirdSongs/Extracted";
+
         // Ensure absolute path
         if (!empty($extractedDir) && $extractedDir[0] !== '/' && strpos($extractedDir, ':') === false) {
             $extractedDir = __ROOT__ . '/' . $extractedDir;
@@ -892,7 +892,7 @@ function handle_charts($type)
 
         json_success([
             'date' => $date,
-            'total_detections' => (int)$total,
+            'total_detections' => (int) $total,
             'detections_by_hour' => $byHour,
             'species_by_hour' => $speciesByHour,
             'top_species' => $topSpecies,
@@ -917,7 +917,7 @@ function handle_charts($type)
         $dates = [];
         $r = $stmt->execute();
         while ($row = $r->fetchArray(SQLITE3_ASSOC)) {
-            $dates[] = ['date' => $row['Date'], 'count' => (int)$row['count']];
+            $dates[] = ['date' => $row['Date'], 'count' => (int) $row['count']];
         }
         json_success(['dates' => $dates]);
     }
@@ -951,7 +951,7 @@ function handle_report($type)
         // month logic
         $thisPeriodStart = date('Y-m-01', strtotime($targetDate));
         $thisPeriodEnd = date('Y-m-t', strtotime($targetDate));
-        
+
         // previous month
         $lastPeriodStart = date('Y-m-01', strtotime("-1 month", strtotime($thisPeriodStart)));
     }
@@ -968,7 +968,7 @@ function handle_report($type)
     $r = $stmt->execute();
     $totalThisWeek = 0;
     while ($row = $r->fetchArray(SQLITE3_ASSOC)) {
-        $row['count'] = (int)$row['count'];
+        $row['count'] = (int) $row['count'];
         $row['max_conf'] = floatval($row['max_conf']);
         $totalThisWeek += $row['count'];
         $thisWeek[] = $row;
@@ -986,8 +986,8 @@ function handle_report($type)
     $r2 = $stmt2->execute();
     $totalLastWeek = 0;
     while ($row = $r2->fetchArray(SQLITE3_ASSOC)) {
-        $lastWeek[$row['Sci_Name']] = (int)$row['count'];
-        $totalLastWeek += (int)$row['count'];
+        $lastWeek[$row['Sci_Name']] = (int) $row['count'];
+        $totalLastWeek += (int) $row['count'];
     }
 
     // Compute changes and new species
@@ -1016,12 +1016,13 @@ function handle_report($type)
         $topNames = [];
         $i = 0;
         foreach ($speciesWithChange as $sp) {
-            if ($i >= $heatmapLimit) break; // Limit heatmap
+            if ($i >= $heatmapLimit)
+                break; // Limit heatmap
             $topNames[] = "'" . SQLite3::escapeString($sp['Sci_Name']) . "'";
             $i++;
         }
         $inClause = implode(',', $topNames);
-        
+
         $stmt3 = $db->prepare("SELECT Sci_Name, Com_Name, SUBSTR(Time, 1, 2) as hour, COUNT(*) as count 
                                FROM detections 
                                WHERE Date >= :start AND Date <= :end AND Sci_Name IN ($inClause)
@@ -1033,7 +1034,8 @@ function handle_report($type)
 
         // Initialize empty map for each top species
         foreach ($speciesWithChange as $index => $sp) {
-            if ($index >= $heatmapLimit) break;
+            if ($index >= $heatmapLimit)
+                break;
             $speciesHourlyCounts[$sp['Sci_Name']] = [
                 'Com_Name' => $sp['Com_Name'],
                 'Sci_Name' => $sp['Sci_Name'],
@@ -1046,10 +1048,10 @@ function handle_report($type)
 
         // Fill with real data
         while ($row = $r3->fetchArray(SQLITE3_ASSOC)) {
-            $h = (int)$row['hour'];
+            $h = (int) $row['hour'];
             $sciName = $row['Sci_Name'];
             if (isset($speciesHourlyCounts[$sciName])) {
-                $speciesHourlyCounts[$sciName]['hours'][$h] = (int)$row['count'];
+                $speciesHourlyCounts[$sciName]['hours'][$h] = (int) $row['count'];
             }
         }
     }
@@ -1068,8 +1070,8 @@ function handle_report($type)
         $daily_raw_map = [];
         while ($row = $res_daily->fetchArray(SQLITE3_ASSOC)) {
             $daily_raw_map[$row['Date']] = [
-                'count' => (int)$row['count'],
-                'unique_species' => (int)$row['unique_species']
+                'count' => (int) $row['count'],
+                'unique_species' => (int) $row['unique_species']
             ];
         }
 
@@ -1093,13 +1095,13 @@ function handle_report($type)
             $date_str = date('Y-m-d', $t);
             $raw = $daily_raw_map[$date_str] ?? ['count' => 0, 'unique_species' => 0];
             $w = $weather_map[$date_str] ?? ['avg_temp' => null, 'avg_wind' => null];
-            
+
             $daily_trend[] = [
                 'date' => $date_str,
                 'count' => $raw['count'],
                 'unique_species' => $raw['unique_species'],
-                'avg_temp' => $w['avg_temp'] !== null ? (float)$w['avg_temp'] : null,
-                'avg_wind' => $w['avg_wind'] !== null ? (float)$w['avg_wind'] : null
+                'avg_temp' => $w['avg_temp'] !== null ? (float) $w['avg_temp'] : null,
+                'avg_wind' => $w['avg_wind'] !== null ? (float) $w['avg_wind'] : null
             ];
         }
 
@@ -1113,8 +1115,8 @@ function handle_report($type)
         while ($row = $res_daily_hourly->fetchArray(SQLITE3_ASSOC)) {
             $daily_hourly[] = [
                 'date' => $row['Date'],
-                'hour' => (int)$row['hour'],
-                'count' => (int)$row['count']
+                'hour' => (int) $row['hour'],
+                'count' => (int) $row['count']
             ];
         }
 
@@ -1124,14 +1126,14 @@ function handle_report($type)
         $lon = $config['LONGITUDE'] ?? $config['longitude'] ?? '';
 
         if (!empty($lat) && !empty($lon)) {
-            $lat = (float)$lat;
-            $lon = (float)$lon;
+            $lat = (float) $lat;
+            $lon = (float) $lon;
             for ($t = $start_ts; $t <= $end_ts; $t = strtotime('+1 day', $t)) {
                 $date_str = date('Y-m-d', $t);
                 $sun = date_sun_info($t, $lat, $lon);
                 if ($sun) {
-                    $sunrise_hour = (float)date('H', $sun['sunrise']) + (float)date('i', $sun['sunrise']) / 60.0;
-                    $sunset_hour = (float)date('H', $sun['sunset']) + (float)date('i', $sun['sunset']) / 60.0;
+                    $sunrise_hour = (float) date('H', $sun['sunrise']) + (float) date('i', $sun['sunrise']) / 60.0;
+                    $sunset_hour = (float) date('H', $sun['sunset']) + (float) date('i', $sun['sunset']) / 60.0;
                     $sun_info[] = [
                         'date' => $date_str,
                         'sunrise' => round($sunrise_hour, 2),
@@ -1151,24 +1153,30 @@ function handle_report($type)
         $stmt_w->bindValue(':date', $targetDate);
         $res_w = $stmt_w->execute();
         while ($wrow = $res_w->fetchArray(SQLITE3_ASSOC)) {
-            $h = (int)$wrow['Hour'];
+            $h = (int) $wrow['Hour'];
             $tempC = isset($wrow['Temp']) && $wrow['Temp'] !== '' ? round(($wrow['Temp'] - 32) * 5 / 9, 1) : null;
-            
-            $code = (int)($wrow['ConditionCode'] ?? 0);
+
+            $code = (int) ($wrow['ConditionCode'] ?? 0);
             $condDesc = 'Cloudy';
-            if ($code === 0) $condDesc = 'Clear';
-            else if ($code >= 1 && $code <= 3) $condDesc = 'Cloudy';
-            else if ($code == 45 || $code == 48) $condDesc = 'Fog';
-            else if (($code >= 51 && $code <= 64) || ($code >= 80 && $code <= 82)) $condDesc = 'Rain';
-            else if (($code >= 71 && $code <= 77) || $code == 85 || $code == 86) $condDesc = 'Snow';
-            else if (($code >= 95 && $code <= 99) || ($code >= 65 && $code <= 67)) $condDesc = 'Thunderstorm';
+            if ($code === 0)
+                $condDesc = 'Clear';
+            else if ($code >= 1 && $code <= 3)
+                $condDesc = 'Cloudy';
+            else if ($code == 45 || $code == 48)
+                $condDesc = 'Fog';
+            else if (($code >= 51 && $code <= 64) || ($code >= 80 && $code <= 82))
+                $condDesc = 'Rain';
+            else if (($code >= 71 && $code <= 77) || $code == 85 || $code == 86)
+                $condDesc = 'Snow';
+            else if (($code >= 95 && $code <= 99) || ($code >= 65 && $code <= 67))
+                $condDesc = 'Thunderstorm';
 
             $hourlyWeather[$h] = [
                 'temp' => $tempC,
                 'wind' => $wrow['WindSpeed'] ?? null,
                 'wind_deg' => $wrow['WindDirection'] ?? null,
                 'condition' => $condDesc,
-                'isday' => isset($wrow['IsDay']) ? (int)$wrow['IsDay'] : (isset($wrow['isday']) ? (int)$wrow['isday'] : 1)
+                'isday' => isset($wrow['IsDay']) ? (int) $wrow['IsDay'] : (isset($wrow['isday']) ? (int) $wrow['isday'] : 1)
             ];
         }
 
@@ -1197,10 +1205,10 @@ function handle_report($type)
     if ($type === 'daily') {
         $home = get_home();
         $config = get_config();
-        $extractedDir = (isset($config['EXTRACTED']) && !empty($config['EXTRACTED'])) 
-                        ? rtrim($config['EXTRACTED'], '/') 
-                        : "$home/BirdSongs/Extracted";
-        
+        $extractedDir = (isset($config['EXTRACTED']) && !empty($config['EXTRACTED']))
+            ? rtrim($config['EXTRACTED'], '/')
+            : "$home/BirdSongs/Extracted";
+
         if (!empty($extractedDir) && $extractedDir[0] !== '/' && strpos($extractedDir, ':') === false) {
             $extractedDir = __ROOT__ . '/' . $extractedDir;
         }
@@ -1235,9 +1243,9 @@ function handle_serve_chart($filename)
 
     // Charts path logic, handling both Raspberry Pi and local XAMPP structure
     $config = get_config();
-    $extractedDir = (isset($config['EXTRACTED']) && !empty($config['EXTRACTED'])) 
-                    ? rtrim($config['EXTRACTED'], '/') 
-                    : "$home/BirdSongs/Extracted";
+    $extractedDir = (isset($config['EXTRACTED']) && !empty($config['EXTRACTED']))
+        ? rtrim($config['EXTRACTED'], '/')
+        : "$home/BirdSongs/Extracted";
 
     // Ensure absolute path
     if (!empty($extractedDir) && $extractedDir[0] !== '/' && strpos($extractedDir, ':') === false) {
@@ -1268,8 +1276,10 @@ function handle_serve_chart($filename)
     // Serve image
     $mime = 'image/png'; // Default for charts
     $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
-    if ($ext === 'jpg' || $ext === 'jpeg') $mime = 'image/jpeg';
-    else if ($ext === 'gif') $mime = 'image/gif';
+    if ($ext === 'jpg' || $ext === 'jpeg')
+        $mime = 'image/jpeg';
+    else if ($ext === 'gif')
+        $mime = 'image/gif';
 
     // CORS and Headers
     header("Access-Control-Allow-Origin: *");
@@ -1303,8 +1313,7 @@ function handle_serve_media($filepath)
     $config = get_config();
     if (isset($config['EXTRACTED']) && !empty($config['EXTRACTED'])) {
         $extractedDir = rtrim($config['EXTRACTED'], '/');
-    }
-    else {
+    } else {
         $home = get_home();
         if (empty($home))
             $home = __ROOT__;
@@ -1388,44 +1397,80 @@ function handle_config($method, $id = null)
         $config = get_config();
 
         $keys = [
-            'SITE_NAME' => 'BirdNET-Pi', 'LATITUDE' => '', 'LONGITUDE' => '', 'BIRDNET_USER' => '',
-            'MODEL' => '', 'DATABASE_LANG' => 'en', 'BIRDWEATHER_ID' => '', 'CONFIDENCE' => '0.7',
-            'SENSITIVITY' => '1.0', 'OVERLAP' => '0.0', 'AUDIOFMT' => 'mp3', 'RECORDING_LENGTH' => '15',
-            'EXTRACTION_LENGTH' => '6', 'IMAGE_PROVIDER' => 'WIKIPEDIA', 'INFO_SITE' => 'ALLABOUTBIRDS',
-            'APPRISE_NOTIFICATION_TITLE' => '', 'APPRISE_NOTIFICATION_BODY' => '', 'APPRISE_NOTIFY_NEW_SPECIES' => '0',
-            'APPRISE_NOTIFY_NEW_SPECIES_EACH_DAY' => '0', 'APPRISE_WEEKLY_REPORT' => '0', 'COLOR_SCHEME' => 'light',
+            'SITE_NAME' => 'BirdNET-Pi',
+            'LATITUDE' => '',
+            'LONGITUDE' => '',
+            'BIRDNET_USER' => '',
+            'MODEL' => '',
+            'DATABASE_LANG' => 'en',
+            'BIRDWEATHER_ID' => '',
+            'CONFIDENCE' => '0.7',
+            'SENSITIVITY' => '1.0',
+            'OVERLAP' => '0.0',
+            'AUDIOFMT' => 'mp3',
+            'RECORDING_LENGTH' => '15',
+            'EXTRACTION_LENGTH' => '6',
+            'IMAGE_PROVIDER' => 'WIKIPEDIA',
+            'INFO_SITE' => 'ALLABOUTBIRDS',
+            'APPRISE_NOTIFICATION_TITLE' => '',
+            'APPRISE_NOTIFICATION_BODY' => '',
+            'APPRISE_NOTIFY_NEW_SPECIES' => '0',
+            'APPRISE_NOTIFY_NEW_SPECIES_EACH_DAY' => '0',
+            'APPRISE_WEEKLY_REPORT' => '0',
+            'COLOR_SCHEME' => 'light',
             'APPRISE' => '',
 
             // Basic Additions
-            'APPRISE_NOTIFY_EACH_DETECTION' => '0', 'FLICKR_API_KEY' => '', 'FLICKR_FILTER_EMAIL' => '',
-            'APPRISE_MINIMUM_SECONDS_BETWEEN_NOTIFICATIONS_PER_SPECIES' => '0', 'SF_THRESH' => '0.03',
-            'DATA_MODEL_VERSION' => '1', 'APPRISE_ONLY_NOTIFY_SPECIES_NAMES' => '', 'APPRISE_ONLY_NOTIFY_SPECIES_NAMES_2' => '',
+            'APPRISE_NOTIFY_EACH_DETECTION' => '0',
+            'FLICKR_API_KEY' => '',
+            'FLICKR_FILTER_EMAIL' => '',
+            'APPRISE_MINIMUM_SECONDS_BETWEEN_NOTIFICATIONS_PER_SPECIES' => '0',
+            'SF_THRESH' => '0.03',
+            'DATA_MODEL_VERSION' => '1',
+            'APPRISE_ONLY_NOTIFY_SPECIES_NAMES' => '',
+            'APPRISE_ONLY_NOTIFY_SPECIES_NAMES_2' => '',
 
             // Advanced Additions
-            'CADDY_PWD' => '', 'ICE_PWD' => '', 'BIRDNETPI_URL' => '', 'RTSP_STREAM' => '',
-            'RTSP_STREAM_TO_LIVESTREAM' => '', 'ACTIVATE_FREQSHIFT_IN_LIVESTREAM' => '',
-            'FREQSHIFT_HI' => '', 'FREQSHIFT_LO' => '', 'FREQSHIFT_PITCH' => '', 'FREQSHIFT_TOOL' => 'sox',
-            'FREQSHIFT_RECONNECT_DELAY' => '1000', 'FULL_DISK' => 'keep', 'PURGE_THRESHOLD' => '90',
-            'MAX_FILES_SPECIES' => '0', 'PRIVACY_THRESHOLD' => '0', 'REC_CARD' => 'default', 'CHANNELS' => '1',
-            'SILENCE_UPDATE_INDICATOR' => '0', 'AUTOMATIC_UPDATE' => '0', 'RAW_SPECTROGRAM' => '0',
-            'GENERATE_LDFCS_STANDARD' => '0', 'GENERATE_LDFCS_INDICES' => '0',
-            'RARE_SPECIES_THRESHOLD' => '30', 'CUSTOM_IMAGE' => '', 'CUSTOM_IMAGE_TITLE' => '',
-            'LogLevel_BirdnetRecordingService' => 'error', 'LogLevel_SpectrogramViewerService' => 'error',
+            'CADDY_PWD' => '',
+            'ICE_PWD' => '',
+            'BIRDNETPI_URL' => '',
+            'RTSP_STREAM' => '',
+            'RTSP_STREAM_TO_LIVESTREAM' => '',
+            'ACTIVATE_FREQSHIFT_IN_LIVESTREAM' => '',
+            'FREQSHIFT_HI' => '',
+            'FREQSHIFT_LO' => '',
+            'FREQSHIFT_PITCH' => '',
+            'FREQSHIFT_TOOL' => 'sox',
+            'FREQSHIFT_RECONNECT_DELAY' => '1000',
+            'FULL_DISK' => 'keep',
+            'PURGE_THRESHOLD' => '90',
+            'MAX_FILES_SPECIES' => '0',
+            'PRIVACY_THRESHOLD' => '0',
+            'REC_CARD' => 'default',
+            'CHANNELS' => '1',
+            'SILENCE_UPDATE_INDICATOR' => '0',
+            'AUTOMATIC_UPDATE' => '0',
+            'RAW_SPECTROGRAM' => '0',
+            'GENERATE_LDFCS_STANDARD' => '0',
+            'GENERATE_LDFCS_INDICES' => '0',
+            'RARE_SPECIES_THRESHOLD' => '30',
+            'CUSTOM_IMAGE' => '',
+            'CUSTOM_IMAGE_TITLE' => '',
+            'LogLevel_BirdnetRecordingService' => 'error',
+            'LogLevel_SpectrogramViewerService' => 'error',
             'LogLevel_LiveAudioStreamService' => 'error'
         ];
 
         $response = [];
         foreach ($keys as $key => $default) {
             $val = $config[$key] ?? $default;
-            if (is_numeric($default) && strpos((string)$default, '.') !== false) {
+            if (is_numeric($default) && strpos((string) $default, '.') !== false) {
                 $response[$key] = floatval($val);
-            }
-            else if (is_numeric($default)) {
+            } else if (is_numeric($default)) {
                 // Return as string or int depending on usage, but sticking to config as strings is safest for most,
                 // except some are floats like overlap.
                 $response[$key] = $val;
-            }
-            else {
+            } else {
                 $response[$key] = $val;
             }
         }
@@ -1439,27 +1484,65 @@ function handle_config($method, $id = null)
             json_error('Body vuoto', 400);
 
         $allowed = [
-            'SITE_NAME', 'LATITUDE', 'LONGITUDE', 'BIRDNET_USER',
-            'MODEL', 'DATABASE_LANG', 'BIRDWEATHER_ID', 'CONFIDENCE',
-            'SENSITIVITY', 'OVERLAP', 'AUDIOFMT', 'RECORDING_LENGTH',
-            'EXTRACTION_LENGTH', 'IMAGE_PROVIDER', 'INFO_SITE',
-            'APPRISE_NOTIFICATION_TITLE', 'APPRISE_NOTIFICATION_BODY', 'APPRISE_NOTIFY_NEW_SPECIES',
-            'APPRISE_NOTIFY_NEW_SPECIES_EACH_DAY', 'APPRISE_WEEKLY_REPORT', 'COLOR_SCHEME',
+            'SITE_NAME',
+            'LATITUDE',
+            'LONGITUDE',
+            'BIRDNET_USER',
+            'MODEL',
+            'DATABASE_LANG',
+            'BIRDWEATHER_ID',
+            'CONFIDENCE',
+            'SENSITIVITY',
+            'OVERLAP',
+            'AUDIOFMT',
+            'RECORDING_LENGTH',
+            'EXTRACTION_LENGTH',
+            'IMAGE_PROVIDER',
+            'INFO_SITE',
+            'APPRISE_NOTIFICATION_TITLE',
+            'APPRISE_NOTIFICATION_BODY',
+            'APPRISE_NOTIFY_NEW_SPECIES',
+            'APPRISE_NOTIFY_NEW_SPECIES_EACH_DAY',
+            'APPRISE_WEEKLY_REPORT',
+            'COLOR_SCHEME',
             'APPRISE',
 
-            'APPRISE_NOTIFY_EACH_DETECTION', 'FLICKR_API_KEY', 'FLICKR_FILTER_EMAIL',
-            'APPRISE_MINIMUM_SECONDS_BETWEEN_NOTIFICATIONS_PER_SPECIES', 'SF_THRESH',
-            'DATA_MODEL_VERSION', 'APPRISE_ONLY_NOTIFY_SPECIES_NAMES', 'APPRISE_ONLY_NOTIFY_SPECIES_NAMES_2',
+            'APPRISE_NOTIFY_EACH_DETECTION',
+            'FLICKR_API_KEY',
+            'FLICKR_FILTER_EMAIL',
+            'APPRISE_MINIMUM_SECONDS_BETWEEN_NOTIFICATIONS_PER_SPECIES',
+            'SF_THRESH',
+            'DATA_MODEL_VERSION',
+            'APPRISE_ONLY_NOTIFY_SPECIES_NAMES',
+            'APPRISE_ONLY_NOTIFY_SPECIES_NAMES_2',
 
-            'CADDY_PWD', 'ICE_PWD', 'BIRDNETPI_URL', 'RTSP_STREAM',
-            'RTSP_STREAM_TO_LIVESTREAM', 'ACTIVATE_FREQSHIFT_IN_LIVESTREAM',
-            'FREQSHIFT_HI', 'FREQSHIFT_LO', 'FREQSHIFT_PITCH', 'FREQSHIFT_TOOL',
-            'FREQSHIFT_RECONNECT_DELAY', 'FULL_DISK', 'PURGE_THRESHOLD',
-            'MAX_FILES_SPECIES', 'PRIVACY_THRESHOLD', 'REC_CARD', 'CHANNELS',
-            'SILENCE_UPDATE_INDICATOR', 'AUTOMATIC_UPDATE', 'RAW_SPECTROGRAM',
-            'GENERATE_LDFCS_STANDARD', 'GENERATE_LDFCS_INDICES',
-            'RARE_SPECIES_THRESHOLD', 'CUSTOM_IMAGE', 'CUSTOM_IMAGE_TITLE',
-            'LogLevel_BirdnetRecordingService', 'LogLevel_SpectrogramViewerService',
+            'CADDY_PWD',
+            'ICE_PWD',
+            'BIRDNETPI_URL',
+            'RTSP_STREAM',
+            'RTSP_STREAM_TO_LIVESTREAM',
+            'ACTIVATE_FREQSHIFT_IN_LIVESTREAM',
+            'FREQSHIFT_HI',
+            'FREQSHIFT_LO',
+            'FREQSHIFT_PITCH',
+            'FREQSHIFT_TOOL',
+            'FREQSHIFT_RECONNECT_DELAY',
+            'FULL_DISK',
+            'PURGE_THRESHOLD',
+            'MAX_FILES_SPECIES',
+            'PRIVACY_THRESHOLD',
+            'REC_CARD',
+            'CHANNELS',
+            'SILENCE_UPDATE_INDICATOR',
+            'AUTOMATIC_UPDATE',
+            'RAW_SPECTROGRAM',
+            'GENERATE_LDFCS_STANDARD',
+            'GENERATE_LDFCS_INDICES',
+            'RARE_SPECIES_THRESHOLD',
+            'CUSTOM_IMAGE',
+            'CUSTOM_IMAGE_TITLE',
+            'LogLevel_BirdnetRecordingService',
+            'LogLevel_SpectrogramViewerService',
             'LogLevel_LiveAudioStreamService'
         ];
 
@@ -1484,13 +1567,14 @@ function handle_config($method, $id = null)
 
             // Normalizzazione separatore decimale per campi numerici e prevenzione notazione scientifica
             if (in_array($key, ['SF_THRESH', 'LATITUDE', 'LONGITUDE', 'RARE_SPECIES_THRESHOLD', 'PURGE_THRESHOLD'])) {
-                $value = str_replace(',', '.', (string)$value);
+                $value = str_replace(',', '.', (string) $value);
                 if (is_numeric($value)) {
                     // Forziamo un formato decimale standard per evitare scientific notation in birdnet.conf
-                    $value = sprintf("%.6f", (float)$value);
+                    $value = sprintf("%.6f", (float) $value);
                     // Rimuoviamo gli zeri superflui ma manteniamo almeno un decimale se necessario o il punto
                     $value = rtrim(rtrim($value, '0'), '.');
-                    if ($value === "" || $value === "0") $value = "0.0";
+                    if ($value === "" || $value === "0")
+                        $value = "0.0";
                 }
                 if ($key === 'SF_THRESH' && (trim($value) === "" || !is_numeric($value))) {
                     $value = "0.03";
@@ -1501,9 +1585,9 @@ function handle_config($method, $id = null)
             // Se il valore è numericamente uguale ma il formato è diverso (es. quotes), procediamo comunque
             // Forza l'aggiornamento se il valore nel file è racchiuso tra virgolette ma non dovrebbe
             $is_currently_quoted = preg_match("/^\s*#?\s*" . preg_quote($key) . "\s*=\s*\"/mi", $content);
-            
-            if ((string)$oldValue === (string)$value && !$is_currently_quoted)
-                 continue;
+
+            if ((string) $oldValue === (string) $value && !$is_currently_quoted)
+                continue;
 
             if ($key === 'BIRDNETPI_URL') {
                 $value = rtrim($value, '/');
@@ -1520,10 +1604,16 @@ function handle_config($method, $id = null)
 
             // Determiniamo se il valore deve essere racchiuso tra virgolette.
             $should_quote = in_array($key, [
-                'SITE_NAME', 'APPRISE_NOTIFICATION_TITLE', 'APPRISE_NOTIFICATION_BODY', 
-                'APPRISE_ONLY_NOTIFY_SPECIES_NAMES', 'APPRISE_ONLY_NOTIFY_SPECIES_NAMES_2',
-                'CUSTOM_IMAGE_TITLE', 'BIRDNETPI_URL', 'APPRISE', 'RTSP_STREAM'
-            ]) || (strpos((string)$value, ' ') !== false);
+                'SITE_NAME',
+                'APPRISE_NOTIFICATION_TITLE',
+                'APPRISE_NOTIFICATION_BODY',
+                'APPRISE_ONLY_NOTIFY_SPECIES_NAMES',
+                'APPRISE_ONLY_NOTIFY_SPECIES_NAMES_2',
+                'CUSTOM_IMAGE_TITLE',
+                'BIRDNETPI_URL',
+                'APPRISE',
+                'RTSP_STREAM'
+            ]) || (strpos((string) $value, ' ') !== false);
 
             // Salvataggio nel file di configurazione con regex robusta (case-insensitive per il key)
             $pattern = "/^\s*#?\s*" . preg_quote($key) . "\s*=\s*.*$/mi";
@@ -1532,8 +1622,7 @@ function handle_config($method, $id = null)
 
             if (preg_match($pattern, $content)) {
                 $content = preg_replace($pattern, $replacement, $content);
-            }
-            else {
+            } else {
                 $content .= "\n$replacement";
             }
             $updated[] = $key;
@@ -1543,7 +1632,7 @@ function handle_config($method, $id = null)
             if (file_put_contents($configPath, $content) === false) {
                 json_error('Errore durante la scrittura di birdnet.conf', 500);
             }
-            
+
             if (function_exists('get_config')) {
                 get_config(true); // Force config reload
             }
@@ -1625,19 +1714,16 @@ function handle_services($method, $serviceName)
                 shell_exec("sudo systemctl disable icecast2.service 2>&1");
                 shell_exec("sudo systemctl stop icecast2.service 2>&1");
             }
-        }
-        elseif ($action === 'enable') {
+        } elseif ($action === 'enable') {
             if ($serviceName === 'livestream') {
                 shell_exec("sudo systemctl enable icecast2.service 2>&1");
                 shell_exec("sudo systemctl start icecast2.service 2>&1");
                 $output = shell_exec("sudo systemctl enable --now  livestream.service 2>&1");
                 $output .= "\n" . shell_exec("sudo systemctl start livestream.service 2>&1");
-            }
-            else {
+            } else {
                 $output = shell_exec("sudo systemctl enable --now  $svcName 2>&1");
             }
-        }
-        else {
+        } else {
             $output = shell_exec("sudo systemctl $action $svcName 2>&1");
             if ($serviceName === 'livestream') {
                 shell_exec("sudo systemctl $action icecast2.service 2>&1");
@@ -1710,7 +1796,7 @@ function handle_system($method, $action)
 
             // Count commits behind the remote (uses cached fetch; non-blocking)
             $commitsBehind = $gitBranch !== ''
-                ? (int)trim(shell_exec("sudo -u $user $gitBin -C $gitRepo rev-list HEAD..origin/$gitBranch --count 2>/dev/null") ?? '0')
+                ? (int) trim(shell_exec("sudo -u $user $gitBin -C $gitRepo rev-list HEAD..origin/$gitBranch --count 2>/dev/null") ?? '0')
                 : 0;
 
             $infoResponse = [
@@ -1836,8 +1922,8 @@ function handle_species_lists($method, $type)
             $existing = array_values(array_filter(
                 file($filePath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES),
                 function ($l) {
-                return !empty(trim($l));
-            }
+                    return !empty(trim($l));
+                }
             ));
         }
 
@@ -1845,13 +1931,11 @@ function handle_species_lists($method, $type)
             if (!in_array($name, $existing)) {
                 $existing[] = $name;
             }
-        }
-        elseif ($action === 'remove') {
+        } elseif ($action === 'remove') {
             $existing = array_values(array_filter($existing, function ($s) use ($name) {
                 return $s !== $name;
             }));
-        }
-        else {
+        } else {
             json_error("Azione non valida. Usa 'add' o 'remove'", 400);
         }
 
@@ -1878,12 +1962,10 @@ function handle_image($sciName)
     try {
         if ($config["IMAGE_PROVIDER"] === 'NONE' || empty($config["IMAGE_PROVIDER"])) {
             json_success(array('no_provider' => true));
-        }
-        else {
+        } else {
             if ($config["IMAGE_PROVIDER"] === 'FLICKR') {
                 $provider = new Flickr();
-            }
-            else {
+            } else {
                 $provider = new Wikipedia();
             }
             $result = $provider->get_image($sciName);
@@ -1894,8 +1976,7 @@ function handle_image($sciName)
 
             json_success($result);
         }
-    }
-    catch (Exception $e) {
+    } catch (Exception $e) {
         json_error('Errore nel recupero immagine: ' . $e->getMessage(), 500);
     }
 }
@@ -1938,17 +2019,15 @@ function handle_stream_detections()
                 $newest_file = $files[2];
             }
         }
-    }
-    else {
+    } else {
         $look_in_directory = $STREAM_DATA_DIR;
 
         if (file_exists($look_in_directory) && is_dir($look_in_directory)) {
             $files = scandir($look_in_directory, SCANDIR_SORT_ASCENDING);
 
             if (!empty($config['RTSP_STREAM_TO_LIVESTREAM']) && is_numeric($config['RTSP_STREAM_TO_LIVESTREAM'])) {
-                $RTSP_STREAM_LISTENED_TO = ((int)$config['RTSP_STREAM_TO_LIVESTREAM'] + 1);
-            }
-            else {
+                $RTSP_STREAM_LISTENED_TO = ((int) $config['RTSP_STREAM_TO_LIVESTREAM'] + 1);
+            } else {
                 $RTSP_STREAM_LISTENED_TO = 1;
             }
 
@@ -2133,7 +2212,8 @@ function handle_ebird($method, $id)
         }
         $zipDir = $extractedDir . "/exportsZip";
 
-        if (!is_dir($zipDir)) @mkdir($zipDir, 0777, true);
+        if (!is_dir($zipDir))
+            @mkdir($zipDir, 0777, true);
 
         // Include date in batchId so it's easily extractable from filename
         $batchId = "{$date}_" . time() . "_" . bin2hex(random_bytes(4));
@@ -2178,13 +2258,14 @@ function handle_export($method, $id)
             $extractedDir = "$home/BirdSongs/Extracted";
         }
         $zipDir = $extractedDir . "/exportsZip";
-        if (!is_dir($zipDir)) @mkdir($zipDir, 0777, true);
-        
+        if (!is_dir($zipDir))
+            @mkdir($zipDir, 0777, true);
+
         $audioDir = "{$extractedDir}/By_Date/{$date}";
         if (!is_dir($audioDir)) {
             json_error('Nessuna registrazione trovata per la data selezionata', 404);
         }
-        
+
         $statusFile = "{$zipDir}/export_{$date}.status";
         if (file_exists($statusFile)) {
             $currentStatus = json_decode(file_get_contents($statusFile), true);
@@ -2192,12 +2273,12 @@ function handle_export($method, $id)
                 json_success(['message' => 'Un\'esportazione per questa data è già in corso.']);
             }
         }
-        
+
         file_put_contents($statusFile, json_encode(['status' => 'processing', 'date' => $date, 'timestamp' => time()]));
-        
+
         $scriptPath = __ROOT__ . '/scripts/export_zip_async.php';
         shell_exec("nohup php {$scriptPath} " . escapeshellarg($date) . " > /dev/null 2>&1 &");
-        
+
         json_success(['message' => 'Esportazione avviata in background.']);
     }
 
@@ -2241,10 +2322,10 @@ function handle_export($method, $id)
 
         header('Content-Type: text/csv; charset=utf-8');
         header('Content-Disposition: attachment; filename="BirdNET_Export_' . date('Ymd_His') . '.csv"');
-        
+
         $output = fopen('php://output', 'w');
         fputcsv($output, ['Date', 'Time', 'Sci_Name', 'Com_Name', 'Confidence', 'Lat', 'Lon', 'Cutoff']);
-        
+
         $result = $stmt->execute();
         while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
             fputcsv($output, [
@@ -2272,7 +2353,8 @@ function handle_export($method, $id)
         if (is_dir($zipDir)) {
             $files = scandir($zipDir);
             foreach ($files as $f) {
-                if ($f === '.' || $f === '..') continue;
+                if ($f === '.' || $f === '..')
+                    continue;
                 if (str_ends_with($f, '.status')) {
                     $item = json_decode(file_get_contents("{$zipDir}/{$f}"), true);
                     if ($item && $item['status'] === 'processing') {
@@ -2280,7 +2362,7 @@ function handle_export($method, $id)
                             'filename' => '',
                             'date' => $item['date'] ?? '',
                             'status' => 'processing',
-                            'timestamp' => (int)($item['timestamp'] ?? 0),
+                            'timestamp' => (int) ($item['timestamp'] ?? 0),
                             'size' => 0,
                             'url' => ''
                         ];
@@ -2290,14 +2372,14 @@ function handle_export($method, $id)
                         // Extract YYYY-MM-DD from filename
                         preg_match('/(\d{4}-\d{2}-\d{2})/', $f, $matches);
                         $dateStr = $matches[1] ?? '';
-                        
+
                         // If it's an eBird export without date in standard position, 
                         // we might need to be more flexible, but with our new naming it should work.
-                        
+
                         // Check if a corresponding .status file says it's completed (optional, usually if .zip exists it is completed)
                         $statusName = str_replace('.zip', '.status', $f);
                         if (!str_starts_with($statusName, 'export_') && !str_starts_with($statusName, 'eBird_Export_')) {
-                             // Fallback for old Daily Exports if needed, but they are usually export_YYYY-MM-DD.status
+                            // Fallback for old Daily Exports if needed, but they are usually export_YYYY-MM-DD.status
                         }
 
                         if ($dateStr) {
@@ -2314,11 +2396,11 @@ function handle_export($method, $id)
                 }
             }
         }
-        
-        usort($results, function($a, $b) {
+
+        usort($results, function ($a, $b) {
             return $b['timestamp'] - $a['timestamp'];
         });
-        
+
         json_success(['zips' => $results]);
     }
 
@@ -2327,18 +2409,18 @@ function handle_export($method, $id)
         $filename = $body['filename'] ?? $_GET['filename'] ?? '';
         $filename = preg_replace('/[^a-zA-Z0-9_\-\.]/', '', $filename);
         if (empty($filename)) {
-             json_error('Filename non specificato', 400);
+            json_error('Filename non specificato', 400);
         }
-        
+
         $config = get_config();
         $extractedDir = rtrim($config['EXTRACTED'] ?? (__ROOT__ . "/Extracted"), '/');
         $zipDir = $extractedDir . "/exportsZip";
         $filePath = "{$zipDir}/{$filename}";
-        
+
         if (file_exists($filePath)) {
             @unlink($filePath);
         }
-        
+
         // Delete corresponding status file
         $statusPath = str_replace('.zip', '.status', $filePath);
         if (file_exists($statusPath)) {
@@ -2348,7 +2430,7 @@ function handle_export($method, $id)
                 @unlink($statusPath);
             }
         }
-        
+
         // Fallback for old naming if needed
         preg_match('/(\d{4}-\d{2}-\d{2})/', $filename, $matches);
         if (isset($matches[1])) {
@@ -2357,7 +2439,7 @@ function handle_export($method, $id)
                 @unlink($oldStatusPath);
             }
         }
-        
+
         json_success(['message' => 'Zip eliminato correttamente']);
     }
 
@@ -2376,8 +2458,7 @@ function handle_logs()
     $command = "sudo -u $user journalctl --no-hostname -q -o short --show-cursor";
     if ($cursor) {
         $command .= " --after-cursor=" . escapeshellarg($cursor);
-    }
-    else {
+    } else {
         $command .= " -n " . $lines;
     }
     $command .= " -u birdnet_analysis -u birdnet_recording 2>&1";
@@ -2392,8 +2473,7 @@ function handle_logs()
     foreach ($output as $line) {
         if (preg_match('/^-- cursor: (.*)$/', $line, $matches)) {
             $newCursor = $matches[1];
-        }
-        else {
+        } else {
             // Cleaning logic equivalent to the sed command
             // 1. Remove date (e.g. "Mar 06 ")
             $line = str_replace($datePrefix, "", $line);
@@ -2460,7 +2540,7 @@ function handle_trends($method, $species, $start_date, $end_date)
     $res_hourly = $stmt_hourly->execute();
     $hourly = array_fill(0, 24, 0);
     while ($row = $res_hourly->fetchArray(SQLITE3_ASSOC)) {
-        $hourly[(int)$row['hour']] = (int)$row['count'];
+        $hourly[(int) $row['hour']] = (int) $row['count'];
     }
 
     // 3a. Get daily detections
@@ -2470,7 +2550,7 @@ function handle_trends($method, $species, $start_date, $end_date)
     $res_daily = $stmt_daily->execute();
     $daily_raw_map = [];
     while ($row = $res_daily->fetchArray(SQLITE3_ASSOC)) {
-        $daily_raw_map[$row['Date']] = (int)$row['count'];
+        $daily_raw_map[$row['Date']] = (int) $row['count'];
     }
 
     // Determine continuous date range
@@ -2497,15 +2577,15 @@ function handle_trends($method, $species, $start_date, $end_date)
         $date_str = date('Y-m-d', $t);
         $count = $daily_raw_map[$date_str] ?? 0;
         $w = $weather_map[$date_str] ?? ['avg_temp' => null, 'avg_wind' => null];
-        
+
         $daily[] = [
             'date' => $date_str,
             'count' => $count,
-            'avg_temp' => $w['avg_temp'] !== null ? (float)$w['avg_temp'] : null,
-            'avg_wind' => $w['avg_wind'] !== null ? (float)$w['avg_wind'] : null
+            'avg_temp' => $w['avg_temp'] !== null ? (float) $w['avg_temp'] : null,
+            'avg_wind' => $w['avg_wind'] !== null ? (float) $w['avg_wind'] : null
         ];
     }
-    
+
     // 4. Day vs Night Condition Correlation (Radar Chart) for Species
     $stmt_day_night = $db->prepare("SELECT 
                         w.IsDay,
@@ -2534,7 +2614,7 @@ function handle_trends($method, $species, $start_date, $end_date)
         $type = ($row['IsDay'] == 1) ? 'day' : 'night';
         $desc = $row['description'];
         if (isset($day_night_data[$type][$desc])) {
-            $day_night_data[$type][$desc] = (int)$row['count'];
+            $day_night_data[$type][$desc] = (int) $row['count'];
         }
     }
 
@@ -2547,8 +2627,8 @@ function handle_trends($method, $species, $start_date, $end_date)
     while ($row = $res_daily_hourly->fetchArray(SQLITE3_ASSOC)) {
         $daily_hourly[] = [
             'date' => $row['Date'],
-            'hour' => (int)$row['hour'],
-            'count' => (int)$row['count']
+            'hour' => (int) $row['hour'],
+            'count' => (int) $row['count']
         ];
     }
 
@@ -2559,18 +2639,18 @@ function handle_trends($method, $species, $start_date, $end_date)
     $sun_info = [];
 
     if (!empty($lat) && !empty($lon)) {
-        $lat = (float)$lat;
-        $lon = (float)$lon;
+        $lat = (float) $lat;
+        $lon = (float) $lon;
         if (count($daily) > 0) {
             $start = strtotime($daily[0]['date']);
             $end = strtotime($daily[count($daily) - 1]['date']);
-            
+
             for ($t = $start; $t <= $end; $t = strtotime('+1 day', $t)) {
                 $date_str = date('Y-m-d', $t);
                 $sun = date_sun_info($t, $lat, $lon);
                 if ($sun) {
-                    $sunrise_hour = (float)date('H', $sun['sunrise']) + (float)date('i', $sun['sunrise']) / 60.0;
-                    $sunset_hour = (float)date('H', $sun['sunset']) + (float)date('i', $sun['sunset']) / 60.0;
+                    $sunrise_hour = (float) date('H', $sun['sunrise']) + (float) date('i', $sun['sunrise']) / 60.0;
+                    $sunset_hour = (float) date('H', $sun['sunset']) + (float) date('i', $sun['sunset']) / 60.0;
                     $sun_info[] = [
                         'date' => $date_str,
                         'sunrise' => round($sunrise_hour, 2),
@@ -2584,7 +2664,7 @@ function handle_trends($method, $species, $start_date, $end_date)
     json_success([
         'species' => $species,
         'stats' => [
-            'total' => (int)($stats['total'] ?? 0),
+            'total' => (int) ($stats['total'] ?? 0),
             'max_confidence' => floatval($stats['max_conf'] ?? 0),
             'avg_confidence' => floatval($stats['avg_conf'] ?? 0),
             'first_seen' => $stats['first_seen'] ?? null,
