@@ -54,3 +54,4 @@ homepage/index.html
 model/labels_nm.zip
 model/labels_l18n.zip
 .htaccess
+/tests
