@@ -1087,6 +1087,16 @@ function handle_report($type)
         }
 
         // 3. Reconstruct continuous daily trend
+        $home = get_home();
+        $config = get_config();
+        $extractedDir = (isset($config['EXTRACTED']) && !empty($config['EXTRACTED']))
+            ? rtrim($config['EXTRACTED'], '/')
+            : "$home/BirdSongs/Extracted";
+
+        if (!empty($extractedDir) && $extractedDir[0] !== '/' && strpos($extractedDir, ':') === false) {
+            $extractedDir = __ROOT__ . '/' . $extractedDir;
+        }
+
         $daily_trend = [];
         $start_ts = strtotime($thisPeriodStart);
         $end_ts = strtotime($thisPeriodEnd);
@@ -1096,12 +1106,21 @@ function handle_report($type)
             $raw = $daily_raw_map[$date_str] ?? ['count' => 0, 'unique_species' => 0];
             $w = $weather_map[$date_str] ?? ['avg_temp' => null, 'avg_wind' => null];
 
+            $ldfcs_std_file = "LongSpectrograms/daily_standard_$date_str.png";
+            $ldfcs_ind_file = "LongSpectrograms/daily_indices_$date_str.png";
+            $ldfcs_std_path = "$extractedDir/$ldfcs_std_file";
+            $ldfcs_ind_path = "$extractedDir/$ldfcs_ind_file";
+
             $daily_trend[] = [
                 'date' => $date_str,
                 'count' => $raw['count'],
                 'unique_species' => $raw['unique_species'],
                 'avg_temp' => $w['avg_temp'] !== null ? (float) $w['avg_temp'] : null,
-                'avg_wind' => $w['avg_wind'] !== null ? (float) $w['avg_wind'] : null
+                'avg_wind' => $w['avg_wind'] !== null ? (float) $w['avg_wind'] : null,
+                'ldfcs_standard_available' => file_exists($ldfcs_std_path),
+                'ldfcs_indices_available' => file_exists($ldfcs_ind_path),
+                'ldfcs_standard_file' => file_exists($ldfcs_std_path) ? $ldfcs_std_file : null,
+                'ldfcs_indices_file' => file_exists($ldfcs_ind_path) ? $ldfcs_ind_file : null,
             ];
         }
 
