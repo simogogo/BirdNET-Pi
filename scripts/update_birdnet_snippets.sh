@@ -118,6 +118,14 @@ if ! grep -E '^AUTOMATIC_UPDATE=' /etc/birdnet/birdnet.conf &>/dev/null;then
   echo "AUTOMATIC_UPDATE=0" >> /etc/birdnet/birdnet.conf
 fi
 
+if ! grep -E '^GENERATE_LDFCS_STANDARD=' /etc/birdnet/birdnet.conf &>/dev/null;then
+  echo "GENERATE_LDFCS_STANDARD=0" >> /etc/birdnet/birdnet.conf
+fi
+
+if ! grep -E '^GENERATE_LDFCS_INDICES=' /etc/birdnet/birdnet.conf &>/dev/null;then
+  echo "GENERATE_LDFCS_INDICES=0" >> /etc/birdnet/birdnet.conf
+fi
+
 if ! grep -E '^RARE_SPECIES_THRESHOLD=' /etc/birdnet/birdnet.conf &>/dev/null;then
   echo '## RARE_SPECIES_THRESHOLD defines after how many days a species is considered as rare and highlighted on overview page' >> /etc/birdnet/birdnet.conf
   echo "RARE_SPECIES_THRESHOLD=\"30\"" >> /etc/birdnet/birdnet.conf

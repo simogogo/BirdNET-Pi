@@ -17,6 +17,12 @@ from utils.classes import ParseFileName
 from utils.reporting import extract_detection, summary, write_to_file, write_to_db, apprise, bird_weather, heartbeat, \
     update_json_file
 
+try:
+    import utils.spectrogram_generator as spectrogram_generator
+except ImportError as e:
+    spectrogram_generator = None
+    logging.error(f"Failed to import spectrogram_generator: {e}")
+
 shutdown = False
 
 log = logging.getLogger(__name__)
@@ -101,6 +107,7 @@ def process_file(file_name, report_queue):
 
 
 def handle_reporting_queue(queue):
+    process_count = 0
     while True:
         msg = queue.get()
         # check for signal that we are done
@@ -118,6 +125,22 @@ def handle_reporting_queue(queue):
             apprise(file, detections)
             bird_weather(file, detections)
             heartbeat()
+            
+            # --- LDFCS Generation ---
+            if spectrogram_generator is not None:
+                try:
+                    conf = get_settings()
+                    spectrogram_generator.update_daily_spectrogram(file.file_name, conf)
+                    process_count += 1
+                    
+                    # Call render roughly every 10 minutes 
+                    # (Assuming recording_length is between 15s and 60s, checking every 40 processations is safe)
+                    if process_count % 40 == 0:
+                        spectrogram_generator.render_daily_image(conf)
+                except Exception as e:
+                    log.error(f"LDFCS Error: {e}")
+            # --- End LDFCS ---
+            
             os.remove(file.file_name)
         except BaseException as e:
             stderr = e.stderr.decode('utf-8') if isinstance(e, CalledProcessError) else ""

@@ -875,6 +875,15 @@ function handle_charts($type)
         $chart1 = "$home/BirdSongs/Extracted/Charts/Combo-$date.png";
         $chart2 = "$home/BirdSongs/Extracted/Charts/Combo2-$date.png";
 
+        // LDFCS charts (if they exist)
+        $config = get_config();
+        $extractedDir = (isset($config['EXTRACTED']) && !empty($config['EXTRACTED'])) 
+                        ? rtrim($config['EXTRACTED'], '/') 
+                        : "$home/BirdSongs/Extracted";
+        
+        $ldfcs_std = "$extractedDir/LongSpectrograms/daily_standard_$date.png";
+        $ldfcs_ind = "$extractedDir/LongSpectrograms/daily_indices_$date.png";
+
         json_success([
             'date' => $date,
             'total_detections' => (int)$total,
@@ -882,9 +891,11 @@ function handle_charts($type)
             'species_by_hour' => $speciesByHour,
             'top_species' => $topSpecies,
             'species_hourly_counts' => array_values($speciesHourlyCounts),
-            'hourly_weather' => $hourlyWeather, // <--- Injection
+            'hourly_weather' => $hourlyWeather,
             'chart1_available' => file_exists($chart1),
             'chart2_available' => file_exists($chart2),
+            'ldfcs_standard_available' => file_exists($ldfcs_std),
+            'ldfcs_indices_available' => file_exists($ldfcs_ind),
         ]);
     }
 
@@ -1192,10 +1203,19 @@ function handle_serve_chart($filename)
         $home = __ROOT__;
 
     // Charts path logic, handling both Raspberry Pi and local XAMPP structure
+    $config = get_config();
+    $extractedDir = (isset($config['EXTRACTED']) && !empty($config['EXTRACTED'])) 
+                    ? rtrim($config['EXTRACTED'], '/') 
+                    : "$home/BirdSongs/Extracted";
+
     $chartPath1 = "$home/BirdSongs/Extracted/Charts/$filename";
     $chartPath2 = __ROOT__ . "/Charts/$filename";
+    $chartPath3 = "$extractedDir/LongSpectrograms/$filename";
 
-    $path = file_exists($chartPath1) ? $chartPath1 : (file_exists($chartPath2) ? $chartPath2 : null);
+    $path = null;
+    if (file_exists($chartPath1)) $path = $chartPath1;
+    else if (file_exists($chartPath2)) $path = $chartPath2;
+    else if (file_exists($chartPath3)) $path = $chartPath3;
 
     if (!$path) {
         http_response_code(404);
@@ -1345,6 +1365,7 @@ function handle_config($method, $id = null)
             'FREQSHIFT_RECONNECT_DELAY' => '1000', 'FULL_DISK' => 'keep', 'PURGE_THRESHOLD' => '90',
             'MAX_FILES_SPECIES' => '0', 'PRIVACY_THRESHOLD' => '0', 'REC_CARD' => 'default', 'CHANNELS' => '1',
             'SILENCE_UPDATE_INDICATOR' => '0', 'AUTOMATIC_UPDATE' => '0', 'RAW_SPECTROGRAM' => '0',
+            'GENERATE_LDFCS_STANDARD' => '0', 'GENERATE_LDFCS_INDICES' => '0',
             'RARE_SPECIES_THRESHOLD' => '30', 'CUSTOM_IMAGE' => '', 'CUSTOM_IMAGE_TITLE' => '',
             'LogLevel_BirdnetRecordingService' => 'error', 'LogLevel_SpectrogramViewerService' => 'error',
             'LogLevel_LiveAudioStreamService' => 'error'
@@ -1393,6 +1414,7 @@ function handle_config($method, $id = null)
             'FREQSHIFT_RECONNECT_DELAY', 'FULL_DISK', 'PURGE_THRESHOLD',
             'MAX_FILES_SPECIES', 'PRIVACY_THRESHOLD', 'REC_CARD', 'CHANNELS',
             'SILENCE_UPDATE_INDICATOR', 'AUTOMATIC_UPDATE', 'RAW_SPECTROGRAM',
+            'GENERATE_LDFCS_STANDARD', 'GENERATE_LDFCS_INDICES',
             'RARE_SPECIES_THRESHOLD', 'CUSTOM_IMAGE', 'CUSTOM_IMAGE_TITLE',
             'LogLevel_BirdnetRecordingService', 'LogLevel_SpectrogramViewerService',
             'LogLevel_LiveAudioStreamService'
