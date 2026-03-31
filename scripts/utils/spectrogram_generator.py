@@ -58,17 +58,16 @@ def _mag_to_db(S):
     return S_db
 
 
-def _alpha_from_amplitude(mean_mag_per_bin):
-    """Compute the Towsey-style Alpha channel from per-bin mean amplitude.
-
-    Following Towsey et al. (2018): alpha is proportional to overall energy,
-    so silent bins are transparent (alpha≈0) and loud bins are opaque (alpha≈1).
-    Values are normalised within the chunk to [0, 1].
+def _alpha_from_db(db_val):
+    """Compute the Towsey-style Alpha channel from absolute dB.
+    
+    Instead of per-column normalization (which hides dim signals in noise),
+    we use an absolute dB range:
+    - Below -70 dB: fully transparent (alpha=0.0)
+    - Above -35 dB: fully opaque (alpha=1.0)
     """
-    alpha = (mean_mag_per_bin - np.min(mean_mag_per_bin)) / (
-        np.ptp(mean_mag_per_bin) + 1e-8
-    )
-    return alpha
+    alpha = (db_val - (-_DB_RANGE)) / (_DB_RANGE / 2.0)
+    return np.clip(alpha, 0.0, 1.0)
 
 
 def calculate_acoustic_indices(S):
@@ -83,7 +82,9 @@ def calculate_acoustic_indices(S):
     Args:
         S: magnitude spectrogram array of shape (FREQ_BINS, time_frames).
     """
-    mean_mag = np.mean(S, axis=1)                                          # (FREQ_BINS,)
+    # Power Spectrum for energy normalization (un-normalized for visibility)
+    S_db = _mag_to_db(S)
+    mean_db = np.mean(S_db, axis=1)                                       # (FREQ_BINS,)
 
     # ACI per frequency bin: ratio of temporal variation to total energy
     aci = np.sum(np.abs(np.diff(S, axis=1)), axis=1) / (np.sum(S, axis=1) + 1e-8)
@@ -92,14 +93,17 @@ def calculate_acoustic_indices(S):
     S_norm = S / (np.sum(S, axis=1, keepdims=True) + 1e-8)
     entropy = -np.sum(S_norm * np.log2(S_norm + 1e-8), axis=1)
 
-    # Normalise each index to [0, 1] within the chunk
-    mag_norm = (mean_mag - np.min(mean_mag)) / (np.ptp(mean_mag) + 1e-8)
-    aci_norm = (aci - np.min(aci)) / (np.ptp(aci) + 1e-8)
-    ent_norm = (entropy - np.min(entropy)) / (np.ptp(entropy) + 1e-8)
+    # Absolute Scaling for False Color (0-1 range based on physics, not chunk)
+    # Intensity: dB range -70 to -10 (birds glow, wind noise is visible)
+    intensity = (mean_db - (-_DB_RANGE)) / 60.0
+    intensity = np.clip(intensity, 0.0, 1.0)
 
-    alpha = _alpha_from_amplitude(mean_mag)
+    aci_norm = np.clip(aci / 0.5, 0.0, 1.0) # ACI of 0.5 is already very high complexity
+    ent_norm = np.clip(entropy / 10.0, 0.0, 1.0) # Ent of 10 bits is quite broad
 
-    rgba_col = np.stack([mag_norm, aci_norm, ent_norm, alpha], axis=-1)    # (FREQ_BINS, 4)
+    alpha = _alpha_from_db(mean_db)
+
+    rgba_col = np.stack([intensity, aci_norm, ent_norm, alpha], axis=-1)    # (FREQ_BINS, 4)
     return rgba_col
 
 
@@ -116,11 +120,16 @@ def calculate_standard_col(S):
     Args:
         S: magnitude spectrogram of shape (FREQ_BINS, time_frames).
     """
-    S_db = _mag_to_db(S)                           # absolute dB, shape (FREQ_BINS, time_frames)
-    mean_db = np.mean(S_db, axis=1)                # (FREQ_BINS,)
-    mean_mag = np.mean(S, axis=1)                  # (FREQ_BINS,) — raw amplitude for alpha
-    alpha = _alpha_from_amplitude(mean_mag)        # (FREQ_BINS,)
-    return np.stack([mean_db, alpha], axis=-1)     # (FREQ_BINS, 2)
+    S_db = _mag_to_db(S)
+    # Combined aggregation: favors peaks (birds) while maintaining noise background
+    mean_db = np.mean(S_db, axis=1)
+    max_db = np.max(S_db, axis=1)
+    
+    # 50/50 mix helps highlighting birds without losing the wind/noise floor
+    final_db = 0.5 * mean_db + 0.5 * max_db
+    
+    alpha = _alpha_from_db(final_db)
+    return np.stack([final_db, alpha], axis=-1)     # (FREQ_BINS, 2)
 
 def update_daily_spectrogram(audio_path, conf):
     try:
@@ -158,12 +167,9 @@ def update_daily_spectrogram(audio_path, conf):
 
         # Load audio chunk
         y, sr = librosa.load(audio_path, sr=AUDIO_SR, mono=True)
-        # Generate spectrogram
-        # To get exactly FREQ_BINS from stft, n_fft should be 2 * (FREQ_BINS - 1)
-        n_fft = 2 * (FREQ_BINS - 1)
-        S = np.abs(librosa.stft(y, n_fft=n_fft, hop_length=HOP_LENGTH))
-        
-        # Trim S to exactly FREQ_BINS if needed
+        # Standard n_fft for 512 bins is 1024
+        # This gives exactly 513 bins from librosa.stft, we take first 512.
+        S = np.abs(librosa.stft(y, n_fft=1024, hop_length=HOP_LENGTH))
         S = S[:FREQ_BINS, :]
 
         if generate_standard == 1:
