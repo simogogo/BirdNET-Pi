@@ -180,6 +180,7 @@ function handle_auth($method, $action)
 
         // Se CADDY_PWD non e' impostata (prima installazione), basta lo username corretto
         if ($username === $validUser && ($validPass === '' || $password === $validPass)) {
+            $_SESSION['my_authenticated'] = true;
             json_success(['authenticated' => true]);
         }
         else {

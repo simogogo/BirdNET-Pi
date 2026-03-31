@@ -82,12 +82,45 @@ function get_service_mount_name()
 
 function is_authenticated()
 {
-  $ret = false;
-  if (isset($_SERVER['PHP_AUTH_USER'])) {
-    $config = get_config();
-    $ret = ($_SERVER['PHP_AUTH_PW'] == $config['CADDY_PWD'] && $_SERVER['PHP_AUTH_USER'] == 'birdnet');
+  if (isset($_SESSION['my_authenticated']) && $_SESSION['my_authenticated'] === true) {
+    return true;
   }
-  return $ret;
+
+  // Handle Basic Auth from headers (useful for API and Caddy/FastCGI)
+  $user = $_SERVER['PHP_AUTH_USER'] ?? null;
+  $pass = $_SERVER['PHP_AUTH_PW'] ?? null;
+
+  if (empty($user) && isset($_SERVER['HTTP_AUTHORIZATION'])) {
+    if (strpos(strtolower($_SERVER['HTTP_AUTHORIZATION']), 'basic') === 0) {
+      $base64 = substr($_SERVER['HTTP_AUTHORIZATION'], 6);
+      $decoded = base64_decode($base64);
+      if ($decoded && strpos($decoded, ':') !== false) {
+        list($user, $pass) = explode(':', $decoded, 2);
+      }
+    }
+  }
+
+  if (empty($user) && isset($_SERVER['REDIRECT_HTTP_AUTHORIZATION'])) {
+    if (strpos(strtolower($_SERVER['REDIRECT_HTTP_AUTHORIZATION']), 'basic') === 0) {
+      $base64 = substr($_SERVER['REDIRECT_HTTP_AUTHORIZATION'], 6);
+      $decoded = base64_decode($base64);
+      if ($decoded && strpos($decoded, ':') !== false) {
+        list($user, $pass) = explode(':', $decoded, 2);
+      }
+    }
+  }
+
+  if (!empty($user)) {
+    $config = get_config();
+    $validUser = 'birdnet';
+    $validPass = $config['CADDY_PWD'] ?? '';
+    if ($user === $validUser && ($validPass === '' || $pass === $validPass)) {
+      $_SESSION['my_authenticated'] = true;
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function ensure_authenticated($error_message = 'You cannot edit the settings for this installation')
