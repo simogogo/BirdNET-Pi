@@ -901,8 +901,8 @@ function handle_charts($type)
             'chart2_available' => file_exists($chart2),
             'ldfcs_standard_available' => file_exists($ldfcs_std),
             'ldfcs_indices_available' => file_exists($ldfcs_ind),
-            'ldfcs_standard_file' => file_exists($ldfcs_std) ? basename($ldfcs_std) : null,
-            'ldfcs_indices_file' => file_exists($ldfcs_ind) ? basename($ldfcs_ind) : null,
+            'ldfcs_standard_file' => file_exists($ldfcs_std) ? "LongSpectrograms/" . basename($ldfcs_std) : null,
+            'ldfcs_indices_file' => file_exists($ldfcs_ind) ? "LongSpectrograms/" . basename($ldfcs_ind) : null,
         ]);
     }
 
@@ -1209,8 +1209,8 @@ function handle_report($type)
 
         $response['ldfcs_standard_available'] = file_exists($ldfcs_std);
         $response['ldfcs_indices_available'] = file_exists($ldfcs_ind);
-        $response['ldfcs_standard_file'] = file_exists($ldfcs_std) ? basename($ldfcs_std) : null;
-        $response['ldfcs_indices_file'] = file_exists($ldfcs_ind) ? basename($ldfcs_ind) : null;
+        $response['ldfcs_standard_file'] = file_exists($ldfcs_std) ? "LongSpectrograms/" . basename($ldfcs_std) : null;
+        $response['ldfcs_indices_file'] = file_exists($ldfcs_ind) ? "LongSpectrograms/" . basename($ldfcs_ind) : null;
     }
 
     json_success($response);
@@ -1223,7 +1223,7 @@ function handle_serve_chart($filename)
         json_error('Nome file richiesto', 400);
 
     // Security check to avoid path traversal
-    if (strpos($filename, '..') !== false || strpos($filename, '/') !== false) {
+    if (strpos($filename, '..') !== false) {
         json_error('Nome file non valido', 400);
     }
 
@@ -1243,14 +1243,20 @@ function handle_serve_chart($filename)
         $extractedDir = __ROOT__ . '/' . $extractedDir;
     }
 
-    $chartPath1 = "$home/BirdSongs/Extracted/Charts/$filename";
-    $chartPath2 = __ROOT__ . "/Charts/$filename";
-    $chartPath3 = "$extractedDir/LongSpectrograms/$filename";
+    // Try several locations
+    $searchPaths = [
+        "$extractedDir/$filename",                      // New flexible path (e.g. LongSpectrograms/...)
+        "$home/BirdSongs/Extracted/Charts/$filename",   // Legacy path
+        __ROOT__ . "/Charts/$filename"                  // XAMPP legacy path
+    ];
 
     $path = null;
-    if (file_exists($chartPath1)) $path = $chartPath1;
-    else if (file_exists($chartPath2)) $path = $chartPath2;
-    else if (file_exists($chartPath3)) $path = $chartPath3;
+    foreach ($searchPaths as $p) {
+        if (file_exists($p)) {
+            $path = $p;
+            break;
+        }
+    }
 
     if (!$path) {
         http_response_code(404);
@@ -1259,14 +1265,15 @@ function handle_serve_chart($filename)
     }
 
     // Serve image
-    $mime = mime_content_type($path);
-    if (strpos($mime, 'image/') !== 0) {
-        $mime = 'image/png';
-    }
+    $mime = 'image/png'; // Default for charts
+    $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+    if ($ext === 'jpg' || $ext === 'jpeg') $mime = 'image/jpeg';
+    else if ($ext === 'gif') $mime = 'image/gif';
 
+    // CORS and Headers
+    header("Access-Control-Allow-Origin: *");
     header("Content-Type: $mime");
     header("Content-Length: " . filesize($path));
-    // Cache for 1 day
     header("Cache-Control: public, max-age=86400");
 
     // Clear any output buffer to avoid memory issues with large files
