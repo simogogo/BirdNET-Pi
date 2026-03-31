@@ -103,7 +103,8 @@ try {
             handle_report($id);
             break;
         case 'chart':
-            handle_serve_chart($id);
+            $chartPath = substr($path, strlen('chart/'));
+            handle_serve_chart($chartPath);
             break;
         case 'media':
             $mediaPath = substr($path, strlen('media/'));
