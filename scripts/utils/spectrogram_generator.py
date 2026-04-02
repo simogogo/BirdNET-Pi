@@ -73,37 +73,57 @@ def _alpha_from_db(db_val):
 def calculate_acoustic_indices(S):
     """Return an RGBA column (FREQ_BINS, 4) of Acoustic-Index False-Color for one chunk.
 
-    Channels:
-      R = normalised mean amplitude (energy indicator)
-      G = ACI  (Acoustic Complexity Index — high for structured birdsong)
-      B = Temporal Entropy (high for unpredictable/broadband sound)
-      A = alpha derived from mean amplitude (Towsey et al. 2018 convention)
+    Towsey-style Mapping (standard for identifying acoustic niches):
+      R = ACI (Acoustic Complexity — captures bird songs)
+      G = ENT (Temporal Entropy — captures wide-band noise like wind)
+      B = BGN (Background Noise — captures persistent steady noise)
+      
+    Modified: All channels are modulated by Intensitiy (dB level) to avoid
+    "cyan fog" saturation in silent regions.
 
     Args:
         S: magnitude spectrogram array of shape (FREQ_BINS, time_frames).
     """
-    # Power Spectrum for energy normalization (un-normalized for visibility)
+    # 1. Global Intensity for scaling brightness
     S_db = _mag_to_db(S)
     mean_db = np.mean(S_db, axis=1)                                       # (FREQ_BINS,)
-
-    # ACI per frequency bin: ratio of temporal variation to total energy
-    aci = np.sum(np.abs(np.diff(S, axis=1)), axis=1) / (np.sum(S, axis=1) + 1e-8)
-
-    # Shannon temporal entropy per frequency bin
-    S_norm = S / (np.sum(S, axis=1, keepdims=True) + 1e-8)
-    entropy = -np.sum(S_norm * np.log2(S_norm + 1e-8), axis=1)
-
-    # Absolute Scaling for False Color (0-1 range based on physics, not chunk)
-    # Intensity: dB range -70 to -10 (birds glow, wind noise is visible)
-    intensity = (mean_db - (-_DB_RANGE)) / 60.0
+    
+    # Scaling factor for brightness: -70dB (black) to -25dB (full color)
+    # Using a -25dB ceiling makes interesting bird sounds vivid.
+    intensity = (mean_db - (-_DB_RANGE)) / 45.0
     intensity = np.clip(intensity, 0.0, 1.0)
 
-    aci_norm = np.clip(aci / 0.5, 0.0, 1.0) # ACI of 0.5 is already very high complexity
-    ent_norm = np.clip(entropy / 10.0, 0.0, 1.0) # Ent of 10 bits is quite broad
+    # 2. ACI (Acoustic Complexity Index) per frequency bin
+    # Sum of frame-to-frame changes normalized by total magnitude.
+    # Added a small floor to prevent noise-floor saturation.
+    sum_S = np.sum(S, axis=1)
+    aci = np.sum(np.abs(np.diff(S, axis=1)), axis=1) / (sum_S + 1e-4)
+    # Birds typically produce ACI between 0.2 and 0.5.
+    aci_norm = np.clip(aci / 0.5, 0.0, 1.0)
+
+    # 3. ENT (Temporal Entropy) per frequency bin
+    # Shannon entropy of the temporal energy distribution.
+    # Low values mean impulsive sounds; high values mean steady background noise (wind/rain).
+    S_norm = S / (sum_S[:, None] + 1e-12)
+    entropy = -np.sum(S_norm * np.log2(S_norm + 1e-12), axis=1)
+    # Normalise against maximum possible entropy (log2 of time frames)
+    max_ent = np.log2(max(2, S.shape[1]))
+    ent_norm = np.clip(entropy / max_ent, 0.0, 1.0)
+
+    # 4. BGN (Background Noise — Blue channel)
+    # Approximate background level using the minimum magnitude in the segment.
+    bgn_db = librosa.amplitude_to_db(np.min(S, axis=1), ref=_DB_REF, amin=1e-8, top_db=_DB_RANGE)
+    bgn_norm = np.clip((bgn_db - (-_DB_RANGE)) / _DB_RANGE, 0.0, 1.0)
+
+    # Apply Intensity modulation to all channels
+    # This prevents colorful "grain" in silence.
+    r = aci_norm * intensity
+    g = ent_norm * intensity
+    b = bgn_norm * intensity
 
     alpha = _alpha_from_db(mean_db)
 
-    rgba_col = np.stack([intensity, aci_norm, ent_norm, alpha], axis=-1)    # (FREQ_BINS, 4)
+    rgba_col = np.stack([r, g, b, alpha], axis=-1)    # (FREQ_BINS, 4)
     return rgba_col
 
 
