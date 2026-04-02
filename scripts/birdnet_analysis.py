@@ -142,6 +142,9 @@ def handle_reporting_queue(queue):
                     # (Assuming recording_length is between 15s and 60s, checking every 40 processations is safe)
                     if process_count % 40 == 0:
                         spectrogram_generator.render_daily_image(conf)
+                    
+                    if process_count % 100 == 0:
+                        spectrogram_generator.cleanup_ldfcs_memmaps(conf)
                 except Exception as e:
                     log.error(f"LDFCS Error: {e}")
             # --- End LDFCS ---

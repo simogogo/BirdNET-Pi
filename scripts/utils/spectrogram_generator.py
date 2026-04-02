@@ -285,3 +285,29 @@ def render_daily_image(conf):
                 
     except Exception as e:
         log.exception(f"LDFCS Render Error: {e}")
+
+def cleanup_ldfcs_memmaps(conf):
+    """Delete all .dat files in the LDFCS directory that are not for today.
+    
+    This prevents the LongSpectrograms folder from filling up with large
+    binary buffers after the daily PNGs have been generated.
+    """
+    try:
+        ldfcs_dir = _get_ldfcs_dir(conf)
+        today_str = datetime.datetime.now().strftime('%Y-%m-%d')
+        
+        count = 0
+        for filename in os.listdir(ldfcs_dir):
+            if filename.endswith('.dat') and today_str not in filename:
+                file_path = os.path.join(ldfcs_dir, filename)
+                try:
+                    os.remove(file_path)
+                    count += 1
+                except Exception as ex:
+                    log.error(f"Failed to delete {filename}: {ex}")
+        
+        if count > 0:
+            log.info(f"Cleaned up {count} obsolete LDFCS buffer files.")
+            
+    except Exception as e:
+        log.error(f"LDFCS Cleanup Error: {e}")
