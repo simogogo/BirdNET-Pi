@@ -73054,7 +73054,7 @@ r=r==null?s:r.b
 if(r==null)r=B.C
 return A.fV(A.ai(s,s,B.l,s,s,s,s,s,s,s,s,s,s,s),s,s,new A.a9y(this.c,r,s),B.a9)}}
 A.a9y.prototype={
-aI(a1,a2){var s,r,q,p,o,n,m,l,k,j,i,h,g,f=null,e=a2.a/2,d=a2.b/2,c=new A.i(e,d),b=e-20,a=this.b,a0=B.b.pp(a,new A.aPI())
+aI(a1,a2){var s,r,q,p,o,n,m,l,k,j,i,h,g,f=null,e=a2.a/2,d=a2.b/2,c=new A.i(e,d),b=e-30,a=this.b,a0=B.b.pp(a,new A.aPI())
 if(a0===0)return
 $.ae()
 s=A.aO()
@@ -73073,7 +73073,7 @@ s.r=A.T(B.d.ac(255*(0.5+0.5*o)),B.y5.m()>>>16&255,B.y5.m()>>>8&255,B.y5.m()&255)
 m=s.em()
 q.drawArc.apply(q,[A.dn(n),(p*0.2617993877991494-1.570795)*57.29577951308232,13.854084409738354,!0,m])
 m.delete()}l=A.lQ(f,f,f,f,f,B.ab,B.q,f,B.cq,B.aH)
-for(a=this.c,q=b+10,p=0;p<24;p+=2){k=p*0.2617993877991494-1.570795
+for(a=this.c,q=b+14,p=0;p<24;p+=2){k=p*0.2617993877991494-1.570795
 o=Math.cos(k)
 j=Math.sin(k)
 if(p===0)i="12am"
@@ -76605,7 +76605,7 @@ A.b6d.prototype={
 $2(a,b){return a+b},
 $S:173}
 A.b6b.prototype={
-$2(a,b){var s,r,q=this,p=null,o=b.b,n=o/2,m=$.j,l=m?B.C:B.D
+$2(a,b){var s,r,q=this,p=null,o=b.b,n=o/2*0.92,m=$.j,l=m?B.C:B.D
 m=m?B.av:B.aw
 o=A.fV(p,p,p,new A.a8v(l,A.T(38,m.m()>>>16&255,m.m()>>>8&255,m.m()&255),p),new A.C(o,o))
 m=q.a
@@ -76654,16 +76654,16 @@ g=A.ai(i,A.am(A.b([k,A.y(s,i,i,i,i,A.a8(i,i,$.j?B.n:B.m,i,i,i,i,i,i,i,i,12,i,i,B
 return A.aLL(1.1,g,i,e,i,r,!1,i,i,i,1)},
 $S:782}
 A.a8v.prototype={
-aI(a,b){var s,r,q,p,o,n,m,l,k,j,i,h=null,g=b.a/2,f=b.b/2,e=new A.i(g,f)
+aI(a,b){var s,r,q,p,o,n,m,l,k,j,i,h=null,g=b.a/2,f=b.b/2,e=new A.i(g,f),d=g*0.88
 $.ae()
 s=A.aO()
 s.b=B.aP
 s.r=this.c.gn(0)
 s.c=1
-a.fT(e,g*0.5,s)
-a.fT(e,g,s)
+a.fT(e,d*0.5,s)
+a.fT(e,d,s)
 r=A.lQ(h,h,h,h,h,B.ab,B.q,h,B.cq,B.aH)
-for(q=this.b,p=g+15,o=0;o<24;o+=2){n=o*0.2617993877991494-1.5707963267948966
+for(q=this.b,p=d+12,o=0;o<24;o+=2){n=o*0.2617993877991494-1.5707963267948966
 m=Math.cos(n)
 l=Math.sin(n)
 if(o===0)k="12am"
