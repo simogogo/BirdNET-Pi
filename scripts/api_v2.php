@@ -900,10 +900,10 @@ function handle_charts($type)
             'hourly_weather' => $hourlyWeather,
             'chart1_available' => file_exists($chart1),
             'chart2_available' => file_exists($chart2),
-            'ldfcs_standard_available' => file_exists($ldfcs_std),
-            'ldfcs_indices_available' => file_exists($ldfcs_ind),
-            'ldfcs_standard_file' => file_exists($ldfcs_std) ? "LongSpectrograms/" . basename($ldfcs_std) : null,
-            'ldfcs_indices_file' => file_exists($ldfcs_ind) ? "LongSpectrograms/" . basename($ldfcs_ind) : null,
+            'ldfcs_standard_available' => (($config['GENERATE_LDFCS_STANDARD'] ?? '0') === '1' && file_exists($ldfcs_std)),
+            'ldfcs_indices_available' => (($config['GENERATE_LDFCS_INDICES'] ?? '0') === '1' && file_exists($ldfcs_ind)),
+            'ldfcs_standard_file' => (isset($config['GENERATE_LDFCS_STANDARD']) && $config['GENERATE_LDFCS_STANDARD'] === '1' && file_exists($ldfcs_std)) ? "LongSpectrograms/" . basename($ldfcs_std) : null,
+            'ldfcs_indices_file' => (isset($config['GENERATE_LDFCS_INDICES']) && $config['GENERATE_LDFCS_INDICES'] === '1' && file_exists($ldfcs_ind)) ? "LongSpectrograms/" . basename($ldfcs_ind) : null,
         ]);
     }
 
@@ -1117,10 +1117,10 @@ function handle_report($type)
                 'unique_species' => $raw['unique_species'],
                 'avg_temp' => $w['avg_temp'] !== null ? (float) $w['avg_temp'] : null,
                 'avg_wind' => $w['avg_wind'] !== null ? (float) $w['avg_wind'] : null,
-                'ldfcs_standard_available' => file_exists($ldfcs_std_path),
-                'ldfcs_indices_available' => file_exists($ldfcs_ind_path),
-                'ldfcs_standard_file' => file_exists($ldfcs_std_path) ? $ldfcs_std_file : null,
-                'ldfcs_indices_file' => file_exists($ldfcs_ind_path) ? $ldfcs_ind_file : null,
+                'ldfcs_standard_available' => (($config['GENERATE_LDFCS_STANDARD'] ?? '0') === '1' && file_exists($ldfcs_std_path)),
+                'ldfcs_indices_available' => (($config['GENERATE_LDFCS_INDICES'] ?? '0') === '1' && file_exists($ldfcs_ind_path)),
+                'ldfcs_standard_file' => (isset($config['GENERATE_LDFCS_STANDARD']) && $config['GENERATE_LDFCS_STANDARD'] === '1' && file_exists($ldfcs_std_path)) ? $ldfcs_std_file : null,
+                'ldfcs_indices_file' => (isset($config['GENERATE_LDFCS_INDICES']) && $config['GENERATE_LDFCS_INDICES'] === '1' && file_exists($ldfcs_ind_path)) ? $ldfcs_ind_file : null,
             ];
         }
 
@@ -1235,10 +1235,10 @@ function handle_report($type)
         $ldfcs_std = "$extractedDir/LongSpectrograms/daily_standard_$thisPeriodStart.png";
         $ldfcs_ind = "$extractedDir/LongSpectrograms/daily_indices_$thisPeriodStart.png";
 
-        $response['ldfcs_standard_available'] = file_exists($ldfcs_std);
-        $response['ldfcs_indices_available'] = file_exists($ldfcs_ind);
-        $response['ldfcs_standard_file'] = file_exists($ldfcs_std) ? "LongSpectrograms/" . basename($ldfcs_std) : null;
-        $response['ldfcs_indices_file'] = file_exists($ldfcs_ind) ? "LongSpectrograms/" . basename($ldfcs_ind) : null;
+        $response['ldfcs_standard_available'] = (($config['GENERATE_LDFCS_STANDARD'] ?? '0') === '1' && file_exists($ldfcs_std));
+        $response['ldfcs_indices_available'] = (($config['GENERATE_LDFCS_INDICES'] ?? '0') === '1' && file_exists($ldfcs_ind));
+        $response['ldfcs_standard_file'] = (isset($config['GENERATE_LDFCS_STANDARD']) && $config['GENERATE_LDFCS_STANDARD'] === '1' && file_exists($ldfcs_std)) ? "LongSpectrograms/" . basename($ldfcs_std) : null;
+        $response['ldfcs_indices_file'] = (isset($config['GENERATE_LDFCS_INDICES']) && $config['GENERATE_LDFCS_INDICES'] === '1' && file_exists($ldfcs_ind)) ? "LongSpectrograms/" . basename($ldfcs_ind) : null;
     }
 
     json_success($response);
