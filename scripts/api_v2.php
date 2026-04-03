@@ -1833,18 +1833,48 @@ function handle_system($method, $action)
             break;
 
         case 'backup':
-            $backupPath = "/tmp/birdnet_backup_" . date('Y-m-d_His') . ".tar.gz";
-            $dbPath = __ROOT__ . '/scripts/birds.db';
-            shell_exec("tar -czf $backupPath $dbPath /etc/birdnet/birdnet.conf 2>/dev/null");
+            require_auth();
+            $user = get_user();
+            $home = get_home();
+            set_time_limit(0);
+            $date_str = date("Ymd\THis");
+            header("Content-Description: File Transfer");
+            header("Content-Type: application/octet-stream");
+            header("Content-Disposition: attachment; filename=\"backup-$date_str.tar\"");
+            if (ob_get_length())
+                ob_clean();
+            passthru("sudo -u $user $home/BirdNET-Pi/scripts/backup_data.sh -a backup -f -");
+            exit;
 
-            if (file_exists($backupPath)) {
-                header('Content-Type: application/gzip');
-                header('Content-Disposition: attachment; filename="' . basename($backupPath) . '"');
-                readfile($backupPath);
-                unlink($backupPath);
-                exit;
+        case 'backup-size':
+            require_auth();
+            $user = get_user();
+            $home = get_home();
+            $size = trim(shell_exec("sudo -u $user $home/BirdNET-Pi/scripts/backup_data.sh -a size") ?? '0');
+            json_success(['size_bytes' => (int) $size]);
+            break;
+
+        case 'restore':
+            require_auth();
+            if ($method !== 'POST')
+                json_error('Usa POST', 405);
+            $user = get_user();
+            $home = get_home();
+            if (!empty($_FILES)) {
+                if ($_FILES["file"]["error"]) {
+                    json_error('Errore nell\'upload del file: ' . $_FILES["file"]["error"], 400);
+                }
+                $tempFile = "$home/BirdSongs/tmp_restore.tar";
+                if (!move_uploaded_file($_FILES["file"]["tmp_name"], $tempFile)) {
+                    json_error('Errore nello spostamento del file caricato', 500);
+                }
+                // Run restore in background as it stops services and takes time
+                $logFile = "$home/BirdSongs/restore.log";
+                shell_exec("nohup sudo -u $user $home/BirdNET-Pi/scripts/backup_data.sh -a restore -f $tempFile > $logFile 2>&1 &");
+                json_success(['message' => 'Ripristino avviato in background. Monitora il log per lo stato.']);
+            } else {
+                json_error('Nessun file caricato', 400);
             }
-            json_error('Errore nella creazione del backup', 500);
             break;
 
         case 'stop-services':
@@ -1884,7 +1914,7 @@ function handle_system($method, $action)
             break;
 
         default:
-            json_error("Azione non valida: $action. Valori ammessi: reboot, shutdown, update, clear-data, info, backup, stop-services, restart-services", 400);
+            json_error("Azione non valida: $action. Valori ammessi: reboot, shutdown, update, clear-data, info, backup, backup-size, restore, stop-services, restart-services", 400);
     }
 }
 
