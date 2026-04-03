@@ -1786,11 +1786,19 @@ function handle_services($method, $serviceName)
 //  SYSTEM 
 function handle_system($method, $action)
 {
-    // GET is allowed only for 'info' (read-only); all other actions require POST
-    if ($action === 'info' && $method !== 'GET' && $method !== 'POST')
-        json_error('Usa GET o POST', 405);
-    if ($action !== 'info' && $method !== 'POST')
-        json_error('Usa POST', 405);
+    // GET and DELETE are allowed for 'backups' (CRUD-like action); 
+    // all other actions (except 'info') require POST.
+    $allowed_methods = ['POST'];
+    if ($action === 'info' || $action === 'backups') {
+        $allowed_methods[] = 'GET';
+    }
+    if ($action === 'backups') {
+        $allowed_methods[] = 'DELETE';
+    }
+
+    if (!in_array($method, $allowed_methods)) {
+        json_error("Metodo {$method} non supportato per l'azione {$action}. Usa: " . implode(', ', $allowed_methods), 405);
+    }
     require_auth();
 
     $home = get_home();
@@ -2795,4 +2803,37 @@ function handle_trends($method, $species, $start_date, $end_date)
         'sun_info' => $sun_info,
         'server_timezone' => date_default_timezone_get()
     ]);
+}
+function handle_backup_file($method, $filename)
+{
+    if ($method !== 'GET')
+        json_error('Usa GET', 405);
+    require_auth();
+
+    // Sanitize filename to prevent directory traversal
+    $filename = preg_replace('/[^a-zA-Z0-9_\-\.]/', '', $filename);
+    if (empty($filename)) {
+        json_error('Filename non valido', 400);
+    }
+
+    $home = get_home();
+    $config = get_config();
+    $recsDir = $config['RECS_DIR'] ?? "{$home}/BirdSongs";
+    $backupDir = rtrim($recsDir, '/') . "/Backups";
+    $filePath = "{$backupDir}/{$filename}";
+
+    if (!file_exists($filePath)) {
+        json_error('File non trovato: ' . $filename, 404);
+    }
+
+    // Serve the file
+    header('Content-Description: File Transfer');
+    header('Content-Type: application/x-tar');
+    header('Content-Disposition: attachment; filename="' . basename($filePath) . '"');
+    header('Expires: 0');
+    header('Cache-Control: must-revalidate');
+    header('Pragma: public');
+    header('Content-Length: ' . filesize($filePath));
+    readfile($filePath);
+    exit;
 }
