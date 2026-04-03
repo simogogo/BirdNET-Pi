@@ -113,10 +113,29 @@ try {
             $chartPath = substr($path, strlen('chart/'));
             handle_serve_chart($chartPath);
             break;
-        case 'media':
-            $mediaPath = substr($path, strlen('media/'));
-            handle_serve_media($mediaPath);
+        case 'backup-file':
+            // Resource to serve generated backup files
+            require_auth();
+            $filename = substr($path, strlen('backup-file/'));
+            $filename = preg_replace('/[^a-zA-Z0-9_\-\.]/', '', $filename);
+            $config = get_config();
+            $home = get_home();
+            $recsDir = $config['RECS_DIR'] ?? "{$home}/BirdSongs";
+            $filePath = rtrim($recsDir, '/') . "/Backups/{$filename}";
+
+            if (file_exists($filePath) && is_file($filePath)) {
+                header("Content-Description: File Transfer");
+                header("Content-Type: application/octet-stream");
+                header("Content-Disposition: attachment; filename=\"$filename\"");
+                header("Content-Length: " . filesize($filePath));
+                if (ob_get_length())
+                    ob_clean();
+                readfile($filePath);
+                exit;
+            }
+            json_error('File non trovato: ' . $filename, 404);
             break;
+        case 'media':
         case 'config':
             handle_config($method, $id);
             break;
@@ -1832,19 +1851,67 @@ function handle_system($method, $action)
             json_success($infoResponse);
             break;
 
-        case 'backup':
+        case 'backups':
             require_auth();
-            $user = get_user();
-            $home = get_home();
-            set_time_limit(0);
-            $date_str = date("Ymd\THis");
-            header("Content-Description: File Transfer");
-            header("Content-Type: application/octet-stream");
-            header("Content-Disposition: attachment; filename=\"backup-$date_str.tar\"");
-            if (ob_get_length())
-                ob_clean();
-            passthru("sudo -u $user $home/BirdNET-Pi/scripts/backup_data.sh -a backup -f -");
-            exit;
+            $config = get_config();
+            $recsDir = $config['RECS_DIR'] ?? "{$home}/BirdSongs";
+            $backupDir = rtrim($recsDir, '/') . "/Backups";
+            if (!is_dir($backupDir))
+                @mkdir($backupDir, 0777, true);
+
+            if ($method === 'GET') {
+                $results = [];
+                if (is_dir($backupDir)) {
+                    $files = scandir($backupDir);
+                    foreach ($files as $f) {
+                        if ($f === '.' || $f === '..')
+                            continue;
+                        if (str_ends_with($f, '.status')) {
+                            $statusData = json_decode(file_get_contents("{$backupDir}/{$f}"), true);
+                            if ($statusData && $statusData['status'] === 'processing') {
+                                $results[] = array_merge($statusData, ['size' => 0, 'url' => '']);
+                            }
+                        } elseif (str_ends_with($f, '.tar')) {
+                            $statusFile = "{$backupDir}/{$f}.status";
+                            $size = file_exists($statusFile) ? (json_decode(file_get_contents($statusFile), true)['size'] ?? filesize("{$backupDir}/{$f}")) : filesize("{$backupDir}/{$f}");
+                            $results[] = [
+                                'filename' => $f,
+                                'status' => 'completed',
+                                'size' => $size,
+                                'timestamp' => filemtime("{$backupDir}/{$f}"),
+                                'url' => "/backup-file/{$f}"
+                            ];
+                        }
+                    }
+                }
+                usort($results, function ($a, $b) {
+                    return ($b['timestamp'] ?? 0) - ($a['timestamp'] ?? 0);
+                });
+                json_success(['backups' => $results]);
+            }
+
+            if ($method === 'POST') {
+                // Trigger background generation
+                $scriptPath = __ROOT__ . '/scripts/backup_async.php';
+                shell_exec("nohup php {$scriptPath} > /dev/null 2>&1 &");
+                json_success(['message' => 'Generazione backup avviata']);
+            }
+
+            if ($method === 'DELETE') {
+                $body = get_json_body();
+                $filename = $body['filename'] ?? $_GET['filename'] ?? '';
+                $filename = preg_replace('/[^a-zA-Z0-9_\-\.]/', '', $filename);
+                if (empty($filename)) {
+                    json_error('Filename richiesto', 400);
+                }
+                $filePath = "{$backupDir}/{$filename}";
+                if (file_exists($filePath))
+                    @unlink($filePath);
+                if (file_exists("{$filePath}.status"))
+                    @unlink("{$filePath}.status");
+                json_success(['message' => 'Backup eliminato correttamente']);
+            }
+            break;
 
         case 'backup-size':
             require_auth();
