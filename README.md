@@ -23,10 +23,16 @@ At the moment the coverage of legacy frontend features is arount 90%.
 
 This fork indroduces also a new feature:
  - eBird daily CSV (and daily recordings) export
+ - Species trends
+ - Completelly revamped graphs
+ - CSV exports
+ - Daily recordings export
+ - LDFCS (Long Duration False Color Spectrograms)
+ - Weather data from Open-Meteo.com integration
 
 Flutter source code of this new frontend is available at https://github.com/simogogo/BirdNET-Pi_FlutterFrontend <- Take a look at the new fully responsive layout!
 
-Changes include:
+Changes from original BirdNET-Pi branch include:
 
  - Backup & Restore
  - Web ui is much more responsive
