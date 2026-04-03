@@ -34,6 +34,7 @@ file_put_contents($statusFile, json_encode([
     'filename' => $filename,
     'timestamp' => time()
 ]));
+@chmod($statusFile, 0644);
 
 // Execute the existing backup script
 // Since backup_data.sh restarts services, we use nohup to ensure we don't kill ourselves if caddy restarts
@@ -43,12 +44,14 @@ $return_var = 0;
 exec($cmd, $output, $return_var);
 
 if ($return_var === 0 && file_exists($finalPath)) {
+    @chmod($finalPath, 0644);
     file_put_contents($statusFile, json_encode([
         'status' => 'completed',
         'filename' => $filename,
         'size' => filesize($finalPath),
         'timestamp' => time()
     ]));
+    @chmod($statusFile, 0644);
 } else {
     // If it failed, we still have the status file to report the error
     file_put_contents($statusFile, json_encode([
@@ -57,4 +60,5 @@ if ($return_var === 0 && file_exists($finalPath)) {
         'error' => implode("\n", $output),
         'timestamp' => time()
     ]));
+    @chmod($statusFile, 0644);
 }

@@ -1895,23 +1895,26 @@ function handle_system($method, $action)
                     foreach ($backups as $filename => &$data) {
                         $tarFile = "{$backupDir}/{$filename}";
                         $statusFile = "{$tarFile}.status";
+                        // Use @ to suppress warnings if files are not readable, 
+                        // though we'll try to ensure they are.
                         if (file_exists($statusFile)) {
-                            $statusData = json_decode(file_get_contents($statusFile), true);
+                            $content = @file_get_contents($statusFile);
+                            $statusData = !empty($content) ? json_decode($content, true) : null;
                             if ($statusData) {
                                 $data['status'] = $statusData['status'] ?? 'completed';
                                 $data['timestamp'] = $statusData['timestamp'] ?? (file_exists($tarFile) ? filemtime($tarFile) : time());
                                 if ($data['status'] === 'completed') {
-                                    $data['size'] = $statusData['size'] ?? (file_exists($tarFile) ? filesize($tarFile) : 0);
+                                    $data['size'] = $statusData['size'] ?? (file_exists($tarFile) ? @filesize($tarFile) : 0);
                                 } else {
-                                    $data['size'] = 0;
+                                    $data['size'] = (file_exists($tarFile) && $data['status'] === 'processing') ? @filesize($tarFile) : 0;
                                 }
                             }
                         } elseif (file_exists($tarFile)) {
                             $data['status'] = 'completed';
-                            $data['size'] = filesize($tarFile);
+                            $data['size'] = @filesize($tarFile);
                             $data['timestamp'] = filemtime($tarFile);
                         } else {
-                            // Status file exists but tar is gone? Skip or show error
+                            // Status file exists but tar is gone? Skip
                             unset($backups[$filename]);
                         }
                     }
@@ -1938,10 +1941,12 @@ function handle_system($method, $action)
                     json_error('Filename richiesto', 400);
                 }
                 $filePath = "{$backupDir}/{$filename}";
-                if (file_exists($filePath))
-                    @unlink($filePath);
-                if (file_exists("{$filePath}.status"))
-                    @unlink("{$filePath}.status");
+                $statusPath = "{$filePath}.status";
+
+                // Use sudo to remove files created by the background user
+                shell_exec("sudo -u $user rm -f " . escapeshellarg($filePath));
+                shell_exec("sudo -u $user rm -f " . escapeshellarg($statusPath));
+
                 json_success(['message' => 'Backup eliminato correttamente']);
             }
             break;
