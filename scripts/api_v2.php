@@ -1871,26 +1871,51 @@ function handle_system($method, $action)
                 $results = [];
                 if (is_dir($backupDir)) {
                     $files = scandir($backupDir);
+                    $backups = [];
                     foreach ($files as $f) {
                         if ($f === '.' || $f === '..')
                             continue;
-                        if (str_ends_with($f, '.status')) {
-                            $statusData = json_decode(file_get_contents("{$backupDir}/{$f}"), true);
-                            if ($statusData && $statusData['status'] === 'processing') {
-                                $results[] = array_merge($statusData, ['size' => 0, 'url' => '']);
-                            }
-                        } elseif (str_ends_with($f, '.tar')) {
-                            $statusFile = "{$backupDir}/{$f}.status";
-                            $size = file_exists($statusFile) ? (json_decode(file_get_contents($statusFile), true)['size'] ?? filesize("{$backupDir}/{$f}")) : filesize("{$backupDir}/{$f}");
-                            $results[] = [
-                                'filename' => $f,
-                                'status' => 'completed',
-                                'size' => $size,
-                                'timestamp' => filemtime("{$backupDir}/{$f}"),
-                                'url' => "/backup-file/{$f}"
+                        $base = null;
+                        if (str_ends_with($f, '.tar')) {
+                            $base = $f;
+                        } elseif (str_ends_with($f, '.status')) {
+                            $base = substr($f, 0, -7); // remove .status
+                        }
+                        if ($base && !isset($backups[$base])) {
+                            $backups[$base] = [
+                                'filename' => $base,
+                                'status' => 'completed', // Default if only .tar exists
+                                'size' => 0,
+                                'timestamp' => 0,
+                                'url' => "/backup-file/{$base}"
                             ];
                         }
                     }
+
+                    foreach ($backups as $filename => &$data) {
+                        $tarFile = "{$backupDir}/{$filename}";
+                        $statusFile = "{$tarFile}.status";
+                        if (file_exists($statusFile)) {
+                            $statusData = json_decode(file_get_contents($statusFile), true);
+                            if ($statusData) {
+                                $data['status'] = $statusData['status'] ?? 'completed';
+                                $data['timestamp'] = $statusData['timestamp'] ?? (file_exists($tarFile) ? filemtime($tarFile) : time());
+                                if ($data['status'] === 'completed') {
+                                    $data['size'] = $statusData['size'] ?? (file_exists($tarFile) ? filesize($tarFile) : 0);
+                                } else {
+                                    $data['size'] = 0;
+                                }
+                            }
+                        } elseif (file_exists($tarFile)) {
+                            $data['status'] = 'completed';
+                            $data['size'] = filesize($tarFile);
+                            $data['timestamp'] = filemtime($tarFile);
+                        } else {
+                            // Status file exists but tar is gone? Skip or show error
+                            unset($backups[$filename]);
+                        }
+                    }
+                    $results = array_values($backups);
                 }
                 usort($results, function ($a, $b) {
                     return ($b['timestamp'] ?? 0) - ($a['timestamp'] ?? 0);
