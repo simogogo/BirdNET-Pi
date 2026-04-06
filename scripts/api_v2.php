@@ -136,6 +136,9 @@ try {
             json_error('File non trovato: ' . $filename, 404);
             break;
         case 'media':
+            $mediaPath = substr($path, strlen('media/'));
+            handle_serve_media($mediaPath);
+            break;
         case 'config':
             handle_config($method, $id);
             break;
