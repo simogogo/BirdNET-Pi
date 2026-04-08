@@ -134,7 +134,7 @@ try {
             handle_services($method, $id);
             break;
         case 'system':
-            handle_system($method, $id);
+            handle_system($method, $id, $action);
             break;
         case 'species-lists':
             handle_species_lists($method, $id);
@@ -1768,16 +1768,86 @@ function handle_services($method, $serviceName)
     json_error('Metodo non supportato', 405);
 }
 
+function validate_restore_archive($path)
+{
+    if (!file_exists($path)) return null;
+
+    $required = [
+        "birdnet.conf",
+        "birds.db",
+        "BirdDB.txt",
+        "Charts",
+        "By_Date"
+    ];
+
+    $optional = [
+        "apprise.txt",
+        "body.txt",
+        "blacklisted_images.txt",
+        "disk_check_exclude.txt",
+        "exclude_species_list.txt",
+        "confirmed_species_list.txt",
+        "include_species_list.txt"
+    ];
+
+    // Get top-level entries in the tar
+    $output = [];
+    $cmd = "tar --list --exclude=\"*/*\" -f " . escapeshellarg($path) . " | sed 's/\/\$//'";
+    exec($cmd, $output);
+
+    $found_required = [];
+    $missing_required = [];
+    foreach ($required as $r) {
+        $found = false;
+        foreach ($output as $line) {
+            if (trim($line) === $r) {
+                $found = true;
+                break;
+            }
+        }
+        if ($found) $found_required[] = $r;
+        else $missing_required[] = $r;
+    }
+
+    $found_optional = [];
+    $missing_optional = [];
+    foreach ($optional as $o) {
+        $found = false;
+        foreach ($output as $line) {
+            if (trim($line) === $o) {
+                $found = true;
+                break;
+            }
+        }
+        if ($found) $found_optional[] = $o;
+        else $missing_optional[] = $o;
+    }
+
+    return [
+        'filename' => basename($path),
+        'size' => filesize($path),
+        'mtime' => filemtime($path),
+        'validation' => [
+            'mandatory' => count($missing_required) === 0,
+            'optional' => count($found_optional) > 0,
+            'required_found' => $found_required,
+            'required_missing' => $missing_required,
+            'optional_found' => $found_optional,
+            'optional_missing' => $missing_optional
+        ]
+    ];
+}
+
 //  SYSTEM 
-function handle_system($method, $action)
+function handle_system($method, $action, $subAction = null)
 {
     // GET and DELETE are allowed for 'backups' (CRUD-like action); 
     // all other actions (except 'info') require POST.
     $allowed_methods = ['POST'];
-    if ($action === 'info' || $action === 'backups') {
+    if ($action === 'info' || $action === 'backups' || $action === 'restore') {
         $allowed_methods[] = 'GET';
     }
-    if ($action === 'backups') {
+    if ($action === 'backups' || $action === 'restore') {
         $allowed_methods[] = 'DELETE';
     }
 
@@ -1975,24 +2045,77 @@ function handle_system($method, $action)
 
         case 'restore':
             require_auth();
-            if ($method !== 'POST')
-                json_error('Usa POST', 405);
-            $user = get_user();
+            $config = get_config();
             $home = get_home();
-            if (!empty($_FILES)) {
-                if ($_FILES["file"]["error"]) {
-                    json_error('Errore nell\'upload del file: ' . $_FILES["file"]["error"], 400);
+            $recsDir = $config['RECS_DIR'] ?? "{$home}/BirdSongs";
+            $restoreDir = rtrim($recsDir, '/') . "/Restore";
+            $tempFile = "{$restoreDir}/restore.tar";
+
+            if (!is_dir($restoreDir)) {
+                @mkdir($restoreDir, 0777, true);
+            }
+
+            if ($method === 'GET') {
+                if ($subAction === 'logs') {
+                    $logFile = "{$home}/BirdSongs/restore.log";
+                    if (file_exists($logFile)) {
+                        // Return last 100 lines
+                        $output = shell_exec("tail -n 100 " . escapeshellarg($logFile));
+                        json_success(['logs' => $output]);
+                    } else {
+                        json_success(['logs' => "Nessun log trovato.\n"]);
+                    }
                 }
-                $tempFile = "$home/BirdSongs/tmp_restore.tar";
-                if (!move_uploaded_file($_FILES["file"]["tmp_name"], $tempFile)) {
-                    json_error('Errore nello spostamento del file caricato', 500);
+                
+                // Status check
+                $status = ['has_file' => false];
+                if (file_exists($tempFile)) {
+                    $analysis = validate_restore_archive($tempFile);
+                    if ($analysis) {
+                        $status = array_merge(['has_file' => true], $analysis);
+                    }
                 }
-                // Run restore in background as it stops services and takes time
-                $logFile = "$home/BirdSongs/restore.log";
-                shell_exec("nohup sudo -u $user $home/BirdNET-Pi/scripts/backup_data.sh -a restore -f $tempFile > $logFile 2>&1 &");
-                json_success(['message' => 'Ripristino avviato in background. Monitora il log per lo stato.']);
-            } else {
-                json_error('Nessun file caricato', 400);
+                json_success($status);
+            }
+
+            if ($method === 'POST') {
+                if ($subAction === 'upload') {
+                    if (empty($_FILES)) json_error('Nessun file caricato', 400);
+                    if ($_FILES["file"]["error"]) {
+                        json_error('Errore nell\'upload del file: ' . $_FILES["file"]["error"], 400);
+                    }
+                    if (move_uploaded_file($_FILES["file"]["tmp_name"], $tempFile)) {
+                        $analysis = validate_restore_archive($tempFile);
+                        json_success([
+                            'message' => 'File caricato con successo',
+                            'analysis' => $analysis
+                        ]);
+                    } else {
+                        json_error('Errore nello spostamento del file caricato', 500);
+                    }
+                } elseif ($subAction === 'start') {
+                    if (!file_exists($tempFile)) json_error('File di restore non trovato. Caricalo prima.', 404);
+                    
+                    $analysis = validate_restore_archive($tempFile);
+                    if (!$analysis['validation']['mandatory']) {
+                        json_error('Il file non contiene tutti i componenti obbligatori richiesti.', 400);
+                    }
+
+                    $logFile = "{$home}/BirdSongs/restore.log";
+                    shell_exec("nohup sudo -u $user $home/BirdNET-Pi/scripts/backup_data.sh -a restore -f $tempFile > $logFile 2>&1 &");
+                    json_success(['message' => 'Ripristino avviato in background. Monitora il log per lo stato.']);
+                } else {
+                    json_error('Sotto-azione non valida', 400);
+                }
+            }
+
+            if ($method === 'DELETE') {
+                if (file_exists($tempFile)) {
+                    unlink($tempFile);
+                    json_success(['message' => 'File di restore eliminato']);
+                } else {
+                    json_error('Nessun file di restore da eliminare', 404);
+                }
             }
             break;
 
