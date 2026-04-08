@@ -2394,6 +2394,10 @@ function handle_ebird($method, $id)
         $home = get_home();
         $user = get_user();
 
+        if (empty($user)) {
+            json_error('Impossibile determinare l\'utente di sistema', 500);
+        }
+
         if (isset($config['EXTRACTED']) && !empty($config['EXTRACTED'])) {
             $extractedDir = rtrim($config['EXTRACTED'], '/');
         } else {
@@ -2412,7 +2416,8 @@ function handle_ebird($method, $id)
         
         // Native write as the system user using PHP (robust against large checklists and permissions)
         $batchJson = json_encode($files);
-        $batchCmd = "sudo -u $user php -r 'file_put_contents(" . escapeshellarg($batchFile) . ", base64_decode(" . escapeshellarg(base64_encode($batchJson)) . "), LOCK_EX); chmod(" . escapeshellarg($batchFile) . ", 0644);'";
+        $batchPhp = 'file_put_contents("' . $batchFile . '", base64_decode("' . base64_encode($batchJson) . '"), LOCK_EX); chmod("' . $batchFile . '", 0644);';
+        $batchCmd = "sudo -u $user php -r " . escapeshellarg($batchPhp);
         shell_exec($batchCmd);
 
         $statusFile = "{$zipDir}/eBird_Export_{$batchId}.status";
@@ -2423,7 +2428,8 @@ function handle_ebird($method, $id)
             'batch_id' => $batchId,
             'timestamp' => time()
         ]);
-        $statusCmd = "sudo -u $user php -r 'file_put_contents(" . escapeshellarg($statusFile) . ", base64_decode(" . escapeshellarg(base64_encode($statusData)) . "), LOCK_EX); chmod(" . escapeshellarg($statusFile) . ", 0644);'";
+        $statusPhp = 'file_put_contents("' . $statusFile . '", base64_decode("' . base64_encode($statusData) . '"), LOCK_EX); chmod("' . $statusFile . '", 0644);';
+        $statusCmd = "sudo -u $user php -r " . escapeshellarg($statusPhp);
         shell_exec($statusCmd);
 
         $scriptPath = __ROOT__ . '/scripts/export_zip_async.php';
@@ -2450,6 +2456,10 @@ function handle_export($method, $id)
         $config = get_config();
         $home = get_home();
         $user = get_user();
+
+        if (empty($user)) {
+            json_error('Impossibile determinare l\'utente di sistema', 500);
+        }
 
         if (isset($config['EXTRACTED']) && !empty($config['EXTRACTED'])) {
             $extractedDir = rtrim($config['EXTRACTED'], '/');
@@ -2478,12 +2488,13 @@ function handle_export($method, $id)
 
         // Native write as the system user using PHP (robust against permissions)
         $statusData = json_encode(['status' => 'processing', 'date' => $date, 'timestamp' => time()]);
-        $statusCmd = "sudo -u $user php -r 'file_put_contents(" . escapeshellarg($statusFile) . ", base64_decode(" . escapeshellarg(base64_encode($statusData)) . "), LOCK_EX); chmod(" . escapeshellarg($statusFile) . ", 0644);'";
+        $statusPhp = 'file_put_contents("' . $statusFile . '", base64_decode("' . base64_encode($statusData) . '"), LOCK_EX); chmod("' . $statusFile . '", 0644);';
+        $statusCmd = "sudo -u $user php -r " . escapeshellarg($statusPhp);
         shell_exec($statusCmd);
 
         $scriptPath = __ROOT__ . '/scripts/export_zip_async.php';
         shell_exec("nohup sudo -u $user php {$scriptPath} " . escapeshellarg($date) . " > /dev/null 2>&1 &");
-
+        
         json_success(['message' => 'Esportazione avviata in background.']);
     }
 
