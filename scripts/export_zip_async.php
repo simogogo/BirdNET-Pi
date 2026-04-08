@@ -27,17 +27,15 @@ $zipDir = "{$extractedDir}/exportsZip";
 $user = get_user();
 
 if (!is_dir($zipDir)) {
-    shell_exec("sudo -u $user mkdir -p " . escapeshellarg($zipDir));
-    shell_exec("sudo -u $user chmod 777 " . escapeshellarg($zipDir));
+    @mkdir($zipDir, 0777, true);
 }
 
 /**
- * Funzione helper per scrivere lo stato usando sudo per evitare problemi di permessi
+ * Funzione helper per scrivere lo stato
  */
 function update_status($path, $data, $user) {
-    $json = json_encode($data);
-    $cmd = "echo " . escapeshellarg($json) . " | sudo -u " . escapeshellarg($user) . " tee " . escapeshellarg($path) . " > /dev/null";
-    shell_exec($cmd);
+    file_put_contents($path, json_encode($data), LOCK_EX);
+    @chmod($path, 0644);
 }
 
 $audioDir = "{$extractedDir}/By_Date/{$date}";

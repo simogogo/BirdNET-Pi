@@ -1952,7 +1952,7 @@ function handle_system($method, $action)
                 }
                 // Trigger background generation
                 $scriptPath = __ROOT__ . '/scripts/backup_async.php';
-                shell_exec("nohup php {$scriptPath} > /dev/null 2>&1 &");
+                shell_exec("nohup sudo -u $user php {$scriptPath} > /dev/null 2>&1 &");
                 json_success(['message' => 'Generazione backup avviata']);
             }
 
@@ -2410,21 +2410,26 @@ function handle_ebird($method, $id)
         $batchId = "{$date}_" . time() . "_" . bin2hex(random_bytes(4));
         $batchFile = "{$zipDir}/batch_{$batchId}.json";
         
-        $batchContent = escapeshellarg(json_encode($files));
-        shell_exec("echo $batchContent | sudo -u $user tee " . escapeshellarg($batchFile) . " > /dev/null");
+        // Use temp file for the batch JSON (robust against large checklists)
+        $tmpBatch = tempnam(sys_get_temp_dir(), 'ebird_batch');
+        file_put_contents($tmpBatch, json_encode($files));
+        shell_exec("sudo -u $user mv " . escapeshellarg($tmpBatch) . " " . escapeshellarg($batchFile));
+        shell_exec("sudo -u $user chmod 644 " . escapeshellarg($batchFile));
 
         $statusFile = "{$zipDir}/eBird_Export_{$batchId}.status";
-        $statusContent = escapeshellarg(json_encode([
+        $tmpStatus = tempnam(sys_get_temp_dir(), 'ebird_status');
+        file_put_contents($tmpStatus, json_encode([
             'status' => 'processing',
             'date' => $date,
             'type' => 'ebird',
             'batch_id' => $batchId,
             'timestamp' => time()
         ]));
-        shell_exec("echo $statusContent | sudo -u $user tee " . escapeshellarg($statusFile) . " > /dev/null");
+        shell_exec("sudo -u $user mv " . escapeshellarg($tmpStatus) . " " . escapeshellarg($statusFile));
+        shell_exec("sudo -u $user chmod 644 " . escapeshellarg($statusFile));
 
         $scriptPath = __ROOT__ . '/scripts/export_zip_async.php';
-        shell_exec("nohup php {$scriptPath} " . escapeshellarg($date) . " " . escapeshellarg($batchId) . " > /dev/null 2>&1 &");
+        shell_exec("nohup sudo -u $user php {$scriptPath} " . escapeshellarg($date) . " " . escapeshellarg($batchId) . " > /dev/null 2>&1 &");
 
         json_success([
             'message' => 'Esportazione eBird avviata in background.',
@@ -2473,11 +2478,13 @@ function handle_export($method, $id)
             }
         }
 
-        $statusContent = escapeshellarg(json_encode(['status' => 'processing', 'date' => $date, 'timestamp' => time()]));
-        shell_exec("echo $statusContent | sudo -u $user tee " . escapeshellarg($statusFile) . " > /dev/null");
+        $tmpStatus = tempnam(sys_get_temp_dir(), 'export_status');
+        file_put_contents($tmpStatus, json_encode(['status' => 'processing', 'date' => $date, 'timestamp' => time()]));
+        shell_exec("sudo -u $user mv " . escapeshellarg($tmpStatus) . " " . escapeshellarg($statusFile));
+        shell_exec("sudo -u $user chmod 644 " . escapeshellarg($statusFile));
 
         $scriptPath = __ROOT__ . '/scripts/export_zip_async.php';
-        shell_exec("nohup php {$scriptPath} " . escapeshellarg($date) . " > /dev/null 2>&1 &");
+        shell_exec("nohup sudo -u $user php {$scriptPath} " . escapeshellarg($date) . " > /dev/null 2>&1 &");
 
         json_success(['message' => 'Esportazione avviata in background.']);
     }
@@ -2625,7 +2632,7 @@ function handle_export($method, $id)
         $filePath = "{$zipDir}/{$filename}";
 
         if (file_exists($filePath)) {
-            shell_exec("sudo -u $user rm -f " . escapeshellarg($filePath));
+            shell_exec("sudo rm -f " . escapeshellarg($filePath));
         }
 
         // Delete corresponding status file
@@ -2634,7 +2641,7 @@ function handle_export($method, $id)
             $statusData = json_decode(@file_get_contents($statusPath), true);
             // Only delete if it's NOT still processing (safety)
             if (!$statusData || (isset($statusData['status']) && $statusData['status'] !== 'processing')) {
-                shell_exec("sudo -u $user rm -f " . escapeshellarg($statusPath));
+                shell_exec("sudo rm -f " . escapeshellarg($statusPath));
             }
         }
 
@@ -2643,7 +2650,7 @@ function handle_export($method, $id)
         if (isset($matches[1])) {
             $oldStatusPath = "{$zipDir}/export_{$matches[1]}.status";
             if (file_exists($oldStatusPath) && $oldStatusPath !== $statusPath) {
-                shell_exec("sudo -u $user rm -f " . escapeshellarg($oldStatusPath));
+                shell_exec("sudo rm -f " . escapeshellarg($oldStatusPath));
             }
         }
 
