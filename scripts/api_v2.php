@@ -2552,7 +2552,12 @@ function handle_export($method, $id)
 
     if ($method === 'GET' && $id === 'zip') {
         $config = get_config();
-        $extractedDir = rtrim($config['EXTRACTED'] ?? (__ROOT__ . "/Extracted"), '/');
+        $home = get_home();
+        if (isset($config['EXTRACTED']) && !empty($config['EXTRACTED'])) {
+            $extractedDir = rtrim($config['EXTRACTED'], '/');
+        } else {
+            $extractedDir = "$home/BirdSongs/Extracted";
+        }
         $zipDir = $extractedDir . "/exportsZip";
         $webDir = "/exportsZip";
 
