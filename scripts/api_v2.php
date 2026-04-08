@@ -1899,26 +1899,32 @@ function handle_system($method, $action)
                     foreach ($backups as $filename => &$data) {
                         $tarFile = "{$backupDir}/{$filename}";
                         $statusFile = "{$tarFile}.status";
-                        // Use @ to suppress warnings if files are not readable, 
-                        // though we'll try to ensure they are.
+
+                        // Default assumption: if we only have the tar, it's completed (legacy)
+                        $data['status'] = 'completed';
+                        $data['timestamp'] = file_exists($tarFile) ? filemtime($tarFile) : time();
+                        $data['size'] = file_exists($tarFile) ? @filesize($tarFile) : 0;
+
                         if (file_exists($statusFile)) {
+                            // If status file exists, it's the source of truth.
+                            // Default to processing until proven otherwise (prevents race condition pops).
+                            $data['status'] = 'processing';
+                            
                             $content = @file_get_contents($statusFile);
                             $statusData = !empty($content) ? json_decode($content, true) : null;
+
                             if ($statusData) {
-                                $data['status'] = $statusData['status'] ?? 'completed';
-                                $data['timestamp'] = $statusData['timestamp'] ?? (file_exists($tarFile) ? filemtime($tarFile) : time());
+                                $data['status'] = $statusData['status'] ?? 'processing';
+                                if (isset($statusData['timestamp'])) $data['timestamp'] = $statusData['timestamp'];
+                                
                                 if ($data['status'] === 'completed') {
                                     $data['size'] = $statusData['size'] ?? (file_exists($tarFile) ? @filesize($tarFile) : 0);
                                 } else {
-                                    $data['size'] = (file_exists($tarFile) && $data['status'] === 'processing') ? @filesize($tarFile) : 0;
+                                    $data['size'] = file_exists($tarFile) ? @filesize($tarFile) : 0;
                                 }
                             }
-                        } elseif (file_exists($tarFile)) {
-                            $data['status'] = 'completed';
-                            $data['size'] = @filesize($tarFile);
-                            $data['timestamp'] = filemtime($tarFile);
-                        } else {
-                            // Status file exists but tar is gone? Skip
+                        } elseif (!file_exists($tarFile)) {
+                            // Neither status nor tar exist (shouldn't happen here due to first loop, but safety first)
                             unset($backups[$filename]);
                         }
                     }

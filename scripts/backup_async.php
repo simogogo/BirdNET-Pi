@@ -34,7 +34,7 @@ file_put_contents($statusFile, json_encode([
     'filename' => $filename,
     'timestamp' => time(),
     'pid' => getmypid()
-]));
+]), LOCK_EX);
 @chmod($statusFile, 0644);
 
 // Execute the existing backup script
@@ -51,7 +51,7 @@ if ($return_var === 0 && file_exists($finalPath)) {
         'filename' => $filename,
         'size' => filesize($finalPath),
         'timestamp' => time()
-    ]));
+    ]), LOCK_EX);
     @chmod($statusFile, 0644);
 } else {
     // If it failed, we still have the status file to report the error
@@ -60,6 +60,6 @@ if ($return_var === 0 && file_exists($finalPath)) {
         'filename' => $filename,
         'error' => implode("\n", $output),
         'timestamp' => time()
-    ]));
+    ]), LOCK_EX);
     @chmod($statusFile, 0644);
 }
