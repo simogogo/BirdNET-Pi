@@ -2565,7 +2565,7 @@ function handle_export($method, $id)
 
                         // Check if a corresponding .status file says it's completed (optional, usually if .zip exists it is completed)
                         $statusName = str_replace('.zip', '.status', $f);
-                        if (!str_starts_with($statusName, 'export_') && !str_starts_with($statusName, 'eBird_Export_')) {
+                        if (strpos($statusName, 'export_') !== 0 && strpos($statusName, 'eBird_Export_') !== 0) {
                             // Fallback for old Daily Exports if needed, but they are usually export_YYYY-MM-DD.status
                         }
 
