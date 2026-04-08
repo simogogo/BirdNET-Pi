@@ -124,10 +124,11 @@ try {
             $filePath = rtrim($recsDir, '/') . "/Backups/{$filename}";
 
             if (file_exists($filePath) && is_file($filePath)) {
+                set_time_limit(0);
                 header("Content-Description: File Transfer");
                 header("Content-Type: application/octet-stream");
                 header("Content-Disposition: attachment; filename=\"$filename\"");
-                header("Content-Length: " . filesize($filePath));
+                header("Content-Length: " . sprintf("%u", filesize($filePath)));
                 if (ob_get_length())
                     ob_clean();
                 readfile($filePath);
@@ -1930,6 +1931,18 @@ function handle_system($method, $action)
             }
 
             if ($method === 'POST') {
+                // Check if a backup is already in progress
+                if (is_dir($backupDir)) {
+                    $files = scandir($backupDir);
+                    foreach ($files as $f) {
+                        if (str_ends_with($f, '.status')) {
+                            $statusData = json_decode(@file_get_contents("{$backupDir}/{$f}"), true);
+                            if ($statusData && ($statusData['status'] ?? '') === 'processing') {
+                                json_error('Un processo di backup è già in corso. Attendi il completamento.', 409);
+                            }
+                        }
+                    }
+                }
                 // Trigger background generation
                 $scriptPath = __ROOT__ . '/scripts/backup_async.php';
                 shell_exec("nohup php {$scriptPath} > /dev/null 2>&1 &");
