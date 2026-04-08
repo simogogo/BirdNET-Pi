@@ -1866,6 +1866,7 @@ function handle_system($method, $action)
         case 'backups':
             require_auth();
             $config = get_config();
+            $home = get_home();
             $recsDir = $config['RECS_DIR'] ?? "{$home}/BirdSongs";
             $backupDir = rtrim($recsDir, '/') . "/Backups";
             if (!is_dir($backupDir))
