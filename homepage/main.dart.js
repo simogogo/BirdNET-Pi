@@ -76341,11 +76341,11 @@ var $async$GR=A.p(function(b0,b1){if(b0===1)return A.q(b1,r)
 for(;;)switch(s){case 0:s=3
 return A.k(a8.tM(0),$async$GR)
 case 3:a0=b1
-a1=B.d.pv(a0/10485760)
+a1=B.d.pv(a0/1048576)
 o=t.t,n=t.Cm,m=a8.b,l=t.N,k=t.z,j=t.Iq,i=t.cS,h=p.a,g=null,f=0
 case 4:if(!(f<a1)){s=5
-break}e=f*10485760
-d=e+10485760
+break}e=f*1048576
+d=e+1048576
 a2=A
 a3=f
 a4="totalChunks"

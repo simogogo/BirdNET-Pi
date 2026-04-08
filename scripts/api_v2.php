@@ -2090,8 +2090,11 @@ function handle_system($method, $action, $subAction = null)
                     $chunkIndex = isset($_POST['chunkIndex']) ? (int) $_POST['chunkIndex'] : 0;
                     $totalChunks = isset($_POST['totalChunks']) ? (int) $_POST['totalChunks'] : 1;
 
-                    if (empty($_FILES))
-                        json_error('Nessun pezzetto caricato', 400);
+                    if (empty($_FILES)) {
+                        $max_upload = ini_get('upload_max_filesize');
+                        $max_post = ini_get('post_max_size');
+                        json_error("Nessun pezzetto ricevuto. Limiti PHP: upload_max=$max_upload, post_max=$max_post. Prova a ridurre ulteriormente il chunk.", 400);
+                    }
                     if ($_FILES["file"]["error"]) {
                         json_error('Errore nell\'upload del pezzo: ' . $_FILES["file"]["error"], 400);
                     }
