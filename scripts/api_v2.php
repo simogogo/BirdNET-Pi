@@ -1971,9 +1971,8 @@ function handle_system($method, $action)
                     $statusData = json_decode(@file_get_contents($statusPath), true);
                     if ($statusData && ($statusData['status'] ?? '') === 'processing' && !empty($statusData['pid'])) {
                         $pid = (int)$statusData['pid'];
-                        // Kill the process and all its children in the same group if possible, 
-                        // but simple kill -9 on the pid should stop the PHP script and its blocking exec()
-                        shell_exec("sudo kill -9 $pid > /dev/null 2>&1");
+                        // Kill the entire process group (negative PID)
+                        shell_exec("sudo kill -9 -- -$pid > /dev/null 2>&1");
                     }
                 }
 

@@ -8,6 +8,11 @@ if (php_sapi_name() !== 'cli') {
     die("This script can only be run from the command line.");
 }
 
+// Become process group leader to allow killing entire process tree
+if (function_exists('posix_setpgid')) {
+    posix_setpgid(0, 0);
+}
+
 $root = dirname(__FILE__) . '/..';
 require_once "{$root}/scripts/common.php";
 
