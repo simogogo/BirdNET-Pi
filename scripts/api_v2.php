@@ -114,27 +114,8 @@ try {
             handle_serve_chart($chartPath);
             break;
         case 'backup-file':
-            // Resource to serve generated backup files
-            require_auth();
             $filename = substr($path, strlen('backup-file/'));
-            $filename = preg_replace('/[^a-zA-Z0-9_\-\.]/', '', $filename);
-            $config = get_config();
-            $home = get_home();
-            $recsDir = $config['RECS_DIR'] ?? "{$home}/BirdSongs";
-            $filePath = rtrim($recsDir, '/') . "/Backups/{$filename}";
-
-            if (file_exists($filePath) && is_file($filePath)) {
-                set_time_limit(0);
-                header("Content-Description: File Transfer");
-                header("Content-Type: application/octet-stream");
-                header("Content-Disposition: attachment; filename=\"$filename\"");
-                header("Content-Length: " . sprintf("%u", filesize($filePath)));
-                if (ob_get_length())
-                    ob_clean();
-                readfile($filePath);
-                exit;
-            }
-            json_error('File non trovato: ' . $filename, 404);
+            handle_backup_file($method, $filename);
             break;
         case 'media':
             $mediaPath = substr($path, strlen('media/'));
