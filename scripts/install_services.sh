@@ -355,6 +355,9 @@ EOF
 configure_caddy_php() {
   echo "Configuring PHP for Caddy"
   sed -i 's/www-data/caddy/g' /etc/php/*/fpm/pool.d/www.conf
+  sed -i "s/^upload_max_filesize = .*/upload_max_filesize = 100M/" /etc/php/*/fpm/php.ini
+  sed -i "s/^post_max_size = .*/post_max_size = 100M/" /etc/php/*/fpm/php.ini
+  sed -i "s/^memory_limit = .*/memory_limit = 512M/" /etc/php/*/fpm/php.ini
   systemctl restart php\*-fpm.service
   echo "Adding Caddy sudoers rule"
   cat << EOF > /etc/sudoers.d/010_caddy-nopasswd

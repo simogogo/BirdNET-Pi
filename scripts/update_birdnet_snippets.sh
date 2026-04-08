@@ -297,6 +297,11 @@ EOF
 
 
 # update snippets above
+echo "Updating PHP configuration limits"
+sed -i "s/^upload_max_filesize = .*/upload_max_filesize = 100M/" /etc/php/*/fpm/php.ini
+sed -i "s/^post_max_size = .*/post_max_size = 100M/" /etc/php/*/fpm/php.ini
+sed -i "s/^memory_limit = .*/memory_limit = 512M/" /etc/php/*/fpm/php.ini
+systemctl restart php\*-fpm.service
 
 systemctl daemon-reload
 restart_services.sh
