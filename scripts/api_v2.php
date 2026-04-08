@@ -2930,14 +2930,40 @@ function handle_backup_file($method, $filename)
         json_error('File non trovato: ' . $filename, 404);
     }
 
+    // Get file size using shell 'stat' to support files > 2GB on 32-bit systems
+    $size = trim(shell_exec("stat -c%s " . escapeshellarg($filePath)));
+    if (!is_numeric($size)) {
+        $size = @filesize($filePath);
+    }
+
     // Serve the file
+    set_time_limit(0); // Disable timeout for large transfers
+    if (function_exists('apache_setenv')) {
+        @apache_setenv('no-gzip', 1);
+    }
+    @ini_set('zlib.output_compression', 'Off');
+
     header('Content-Description: File Transfer');
     header('Content-Type: application/x-tar');
     header('Content-Disposition: attachment; filename="' . basename($filePath) . '"');
     header('Expires: 0');
     header('Cache-Control: must-revalidate');
     header('Pragma: public');
-    header('Content-Length: ' . filesize($filePath));
-    readfile($filePath);
+    if ($size) {
+        header('Content-Length: ' . $size);
+    }
+    
+    // Chunked read to minimize memory usage and prevent timeouts
+    $handle = @fopen($filePath, 'rb');
+    if ($handle) {
+        while (!feof($handle)) {
+            echo fread($handle, 1048576); // 1MB chunks
+            @ob_flush();
+            flush();
+        }
+        fclose($handle);
+    } else {
+        readfile($filePath);
+    }
     exit;
 }
