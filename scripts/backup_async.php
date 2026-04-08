@@ -32,7 +32,8 @@ $statusFile = "{$backupDir}/{$filename}.status";
 file_put_contents($statusFile, json_encode([
     'status' => 'processing',
     'filename' => $filename,
-    'timestamp' => time()
+    'timestamp' => time(),
+    'pid' => getmypid()
 ]));
 @chmod($statusFile, 0644);
 

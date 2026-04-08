@@ -1880,9 +1880,9 @@ function handle_system($method, $action)
                         if ($f === '.' || $f === '..')
                             continue;
                         $base = null;
-                        if (str_ends_with($f, '.tar')) {
+                        if (substr($f, -4) === '.tar') {
                             $base = $f;
-                        } elseif (str_ends_with($f, '.status')) {
+                        } elseif (substr($f, -7) === '.status') {
                             $base = substr($f, 0, -7); // remove .status
                         }
                         if ($base && !isset($backups[$base])) {
@@ -1935,7 +1935,7 @@ function handle_system($method, $action)
                 if (is_dir($backupDir)) {
                     $files = scandir($backupDir);
                     foreach ($files as $f) {
-                        if (str_ends_with($f, '.status')) {
+                        if (substr($f, -7) === '.status') {
                             $statusData = json_decode(@file_get_contents("{$backupDir}/{$f}"), true);
                             if ($statusData && ($statusData['status'] ?? '') === 'processing') {
                                 json_error('Un processo di backup è già in corso. Attendi il completamento.', 409);
@@ -1958,6 +1958,17 @@ function handle_system($method, $action)
                 }
                 $filePath = "{$backupDir}/{$filename}";
                 $statusPath = "{$filePath}.status";
+
+                // Check if it's processing and kill it
+                if (file_exists($statusPath)) {
+                    $statusData = json_decode(@file_get_contents($statusPath), true);
+                    if ($statusData && ($statusData['status'] ?? '') === 'processing' && !empty($statusData['pid'])) {
+                        $pid = (int)$statusData['pid'];
+                        // Kill the process and all its children in the same group if possible, 
+                        // but simple kill -9 on the pid should stop the PHP script and its blocking exec()
+                        shell_exec("sudo kill -9 $pid > /dev/null 2>&1");
+                    }
+                }
 
                 // Use sudo to remove files created by the background user
                 shell_exec("sudo -u $user rm -f " . escapeshellarg($filePath));
@@ -2525,7 +2536,7 @@ function handle_export($method, $id)
             foreach ($files as $f) {
                 if ($f === '.' || $f === '..')
                     continue;
-                if (str_ends_with($f, '.status')) {
+                if (substr($f, -7) === '.status') {
                     $item = json_decode(file_get_contents("{$zipDir}/{$f}"), true);
                     if ($item && $item['status'] === 'processing') {
                         $results[] = [
@@ -2537,8 +2548,8 @@ function handle_export($method, $id)
                             'url' => ''
                         ];
                     }
-                } elseif (str_ends_with($f, '.zip')) {
-                    if (str_starts_with($f, 'Daily_Export_') || str_starts_with($f, 'eBird_Export_')) {
+                } elseif (substr($f, -4) === '.zip') {
+                    if (strpos($f, 'Daily_Export_') === 0 || strpos($f, 'eBird_Export_') === 0) {
                         // Extract YYYY-MM-DD from filename
                         preg_match('/(\d{4}-\d{2}-\d{2})/', $f, $matches);
                         $dateStr = $matches[1] ?? '';

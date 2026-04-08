@@ -88,7 +88,7 @@ else {
                 foreach ($files as $file) {
                     if ($file === '.' || $file === '..')
                         continue;
-                    if (str_ends_with($file, '.wav') || str_ends_with($file, '.flac') || str_ends_with($file, '.mp3')) {
+                    if (substr($file, -4) === '.wav' || substr($file, -5) === '.flac' || substr($file, -4) === '.mp3') {
                         $zip->addFile("{$speciesPath}/{$file}", "{$species}/{$file}");
                         $addedFiles++;
                     }
