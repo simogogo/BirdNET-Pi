@@ -24,9 +24,20 @@ else {
     $extractedDir = "{$home}/BirdSongs/Extracted";
 }
 $zipDir = "{$extractedDir}/exportsZip";
+$user = get_user();
 
 if (!is_dir($zipDir)) {
-    @mkdir($zipDir, 0777, true);
+    shell_exec("sudo -u $user mkdir -p " . escapeshellarg($zipDir));
+    shell_exec("sudo -u $user chmod 777 " . escapeshellarg($zipDir));
+}
+
+/**
+ * Funzione helper per scrivere lo stato usando sudo per evitare problemi di permessi
+ */
+function update_status($path, $data, $user) {
+    $json = json_encode($data);
+    $cmd = "echo " . escapeshellarg($json) . " | sudo -u " . escapeshellarg($user) . " tee " . escapeshellarg($path) . " > /dev/null";
+    shell_exec($cmd);
 }
 
 $audioDir = "{$extractedDir}/By_Date/{$date}";
@@ -40,13 +51,13 @@ $batchFile = $batchId ? "{$zipDir}/batch_{$batchId}.json" : null;
 $finalZipPath = "{$zipDir}/{$zipFileName}";
 
 if (!is_dir($audioDir) && (!$batchId || !file_exists($batchFile))) {
-    file_put_contents($statusFile, json_encode(['status' => 'error', 'error' => 'Audio directory not found or batch file missing', 'date' => $date, 'timestamp' => time()]));
+    update_status($statusFile, ['status' => 'error', 'error' => 'Audio directory not found or batch file missing', 'date' => $date, 'timestamp' => time()], $user);
     exit(1);
 }
 
 $zip = new ZipArchive();
 if ($zip->open($finalZipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
-    file_put_contents($statusFile, json_encode(['status' => 'error', 'error' => 'Cannot create zip file', 'date' => $date, 'timestamp' => time()]));
+    update_status($statusFile, ['status' => 'error', 'error' => 'Cannot create zip file', 'date' => $date, 'timestamp' => time()], $user);
     exit(1);
 }
 
@@ -102,10 +113,10 @@ $zip->close();
 
 if ($addedFiles === 0) {
     @unlink($finalZipPath);
-    file_put_contents($statusFile, json_encode(['status' => 'error', 'error' => 'No audio files found', 'date' => $date, 'timestamp' => time()]));
+    update_status($statusFile, ['status' => 'error', 'error' => 'No audio files found', 'date' => $date, 'timestamp' => time()], $user);
 }
 else {
-    file_put_contents($statusFile, json_encode(['status' => 'completed', 'filename' => $zipFileName, 'date' => $date, 'timestamp' => time()]));
+    update_status($statusFile, ['status' => 'completed', 'filename' => $zipFileName, 'date' => $date, 'timestamp' => time()], $user);
 }
 
 if ($batchFile && file_exists($batchFile)) {

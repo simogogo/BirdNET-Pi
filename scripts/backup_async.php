@@ -20,7 +20,17 @@ $recsDir = $config['RECS_DIR'] ?? "{$home}/BirdSongs";
 $backupDir = rtrim($recsDir, '/') . "/Backups";
 
 if (!is_dir($backupDir)) {
-    @mkdir($backupDir, 0777, true);
+    shell_exec("sudo -u $user mkdir -p " . escapeshellarg($backupDir));
+    shell_exec("sudo -u $user chmod 777 " . escapeshellarg($backupDir));
+}
+
+/**
+ * Funzione helper per scrivere lo stato usando sudo per evitare problemi di permessi
+ */
+function update_status($path, $data, $user) {
+    $json = json_encode($data);
+    $cmd = "echo " . escapeshellarg($json) . " | sudo -u " . escapeshellarg($user) . " tee " . escapeshellarg($path) . " > /dev/null";
+    shell_exec($cmd);
 }
 
 $timestamp = date("Ymd_His");
@@ -29,13 +39,12 @@ $finalPath = "{$backupDir}/{$filename}";
 $statusFile = "{$backupDir}/{$filename}.status";
 
 // Mark as processing
-file_put_contents($statusFile, json_encode([
+update_status($statusFile, [
     'status' => 'processing',
     'filename' => $filename,
     'timestamp' => time(),
     'pid' => getmypid()
-]), LOCK_EX);
-@chmod($statusFile, 0644);
+], $user);
 
 // Execute the existing backup script
 // Since backup_data.sh restarts services, we use nohup to ensure we don't kill ourselves if caddy restarts
@@ -46,20 +55,18 @@ exec($cmd, $output, $return_var);
 
 if ($return_var === 0 && file_exists($finalPath)) {
     @chmod($finalPath, 0644);
-    file_put_contents($statusFile, json_encode([
+    update_status($statusFile, [
         'status' => 'completed',
         'filename' => $filename,
         'size' => filesize($finalPath),
         'timestamp' => time()
-    ]), LOCK_EX);
-    @chmod($statusFile, 0644);
+    ], $user);
 } else {
     // If it failed, we still have the status file to report the error
-    file_put_contents($statusFile, json_encode([
+    update_status($statusFile, [
         'status' => 'error',
         'filename' => $filename,
         'error' => implode("\n", $output),
         'timestamp' => time()
-    ]), LOCK_EX);
-    @chmod($statusFile, 0644);
+    ], $user);
 }
