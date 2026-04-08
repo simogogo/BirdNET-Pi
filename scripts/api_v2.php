@@ -2410,23 +2410,21 @@ function handle_ebird($method, $id)
         $batchId = "{$date}_" . time() . "_" . bin2hex(random_bytes(4));
         $batchFile = "{$zipDir}/batch_{$batchId}.json";
         
-        // Use temp file for the batch JSON (robust against large checklists)
-        $tmpBatch = tempnam(sys_get_temp_dir(), 'ebird_batch');
-        file_put_contents($tmpBatch, json_encode($files));
-        shell_exec("sudo -u $user mv " . escapeshellarg($tmpBatch) . " " . escapeshellarg($batchFile));
-        shell_exec("sudo -u $user chmod 644 " . escapeshellarg($batchFile));
+        // Native write as the system user using PHP (robust against large checklists and permissions)
+        $batchJson = json_encode($files);
+        $batchCmd = "sudo -u $user php -r 'file_put_contents(" . escapeshellarg($batchFile) . ", base64_decode(" . escapeshellarg(base64_encode($batchJson)) . "), LOCK_EX); chmod(" . escapeshellarg($batchFile) . ", 0644);'";
+        shell_exec($batchCmd);
 
         $statusFile = "{$zipDir}/eBird_Export_{$batchId}.status";
-        $tmpStatus = tempnam(sys_get_temp_dir(), 'ebird_status');
-        file_put_contents($tmpStatus, json_encode([
+        $statusData = json_encode([
             'status' => 'processing',
             'date' => $date,
             'type' => 'ebird',
             'batch_id' => $batchId,
             'timestamp' => time()
-        ]));
-        shell_exec("sudo -u $user mv " . escapeshellarg($tmpStatus) . " " . escapeshellarg($statusFile));
-        shell_exec("sudo -u $user chmod 644 " . escapeshellarg($statusFile));
+        ]);
+        $statusCmd = "sudo -u $user php -r 'file_put_contents(" . escapeshellarg($statusFile) . ", base64_decode(" . escapeshellarg(base64_encode($statusData)) . "), LOCK_EX); chmod(" . escapeshellarg($statusFile) . ", 0644);'";
+        shell_exec($statusCmd);
 
         $scriptPath = __ROOT__ . '/scripts/export_zip_async.php';
         shell_exec("nohup sudo -u $user php {$scriptPath} " . escapeshellarg($date) . " " . escapeshellarg($batchId) . " > /dev/null 2>&1 &");
@@ -2478,10 +2476,10 @@ function handle_export($method, $id)
             }
         }
 
-        $tmpStatus = tempnam(sys_get_temp_dir(), 'export_status');
-        file_put_contents($tmpStatus, json_encode(['status' => 'processing', 'date' => $date, 'timestamp' => time()]));
-        shell_exec("sudo -u $user mv " . escapeshellarg($tmpStatus) . " " . escapeshellarg($statusFile));
-        shell_exec("sudo -u $user chmod 644 " . escapeshellarg($statusFile));
+        // Native write as the system user using PHP (robust against permissions)
+        $statusData = json_encode(['status' => 'processing', 'date' => $date, 'timestamp' => time()]);
+        $statusCmd = "sudo -u $user php -r 'file_put_contents(" . escapeshellarg($statusFile) . ", base64_decode(" . escapeshellarg(base64_encode($statusData)) . "), LOCK_EX); chmod(" . escapeshellarg($statusFile) . ", 0644);'";
+        shell_exec($statusCmd);
 
         $scriptPath = __ROOT__ . '/scripts/export_zip_async.php';
         shell_exec("nohup sudo -u $user php {$scriptPath} " . escapeshellarg($date) . " > /dev/null 2>&1 &");
