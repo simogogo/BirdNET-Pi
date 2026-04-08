@@ -1770,7 +1770,8 @@ function handle_services($method, $serviceName)
 
 function validate_restore_archive($path)
 {
-    if (!file_exists($path)) return null;
+    if (!file_exists($path))
+        return null;
 
     $required = [
         "birdnet.conf",
@@ -1805,8 +1806,10 @@ function validate_restore_archive($path)
                 break;
             }
         }
-        if ($found) $found_required[] = $r;
-        else $missing_required[] = $r;
+        if ($found)
+            $found_required[] = $r;
+        else
+            $missing_required[] = $r;
     }
 
     $found_optional = [];
@@ -1819,8 +1822,10 @@ function validate_restore_archive($path)
                 break;
             }
         }
-        if ($found) $found_optional[] = $o;
-        else $missing_optional[] = $o;
+        if ($found)
+            $found_optional[] = $o;
+        else
+            $missing_optional[] = $o;
     }
 
     return [
@@ -1961,14 +1966,15 @@ function handle_system($method, $action, $subAction = null)
                             // If status file exists, it's the source of truth.
                             // Default to processing until proven otherwise (prevents race condition pops).
                             $data['status'] = 'processing';
-                            
+
                             $content = @file_get_contents($statusFile);
                             $statusData = !empty($content) ? json_decode($content, true) : null;
 
                             if ($statusData) {
                                 $data['status'] = $statusData['status'] ?? 'processing';
-                                if (isset($statusData['timestamp'])) $data['timestamp'] = $statusData['timestamp'];
-                                
+                                if (isset($statusData['timestamp']))
+                                    $data['timestamp'] = $statusData['timestamp'];
+
                                 if ($data['status'] === 'completed') {
                                     $data['size'] = $statusData['size'] ?? (file_exists($tarFile) ? @filesize($tarFile) : 0);
                                 } else {
@@ -2021,7 +2027,7 @@ function handle_system($method, $action, $subAction = null)
                 if (file_exists($statusPath)) {
                     $statusData = json_decode(@file_get_contents($statusPath), true);
                     if ($statusData && ($statusData['status'] ?? '') === 'processing' && !empty($statusData['pid'])) {
-                        $pid = (int)$statusData['pid'];
+                        $pid = (int) $statusData['pid'];
                         // Kill the entire process group (negative PID)
                         shell_exec("sudo kill -9 -- -$pid > /dev/null 2>&1");
                     }
@@ -2051,9 +2057,10 @@ function handle_system($method, $action, $subAction = null)
             $restoreDir = rtrim($recsDir, '/') . "/Restore";
             $tempFile = "{$restoreDir}/restore.tar";
 
-            if (!is_dir($restoreDir)) {
+            set_time_limit(600); // 10 minutes for slow uploads
+            ini_set('memory_limit', '512M');
+            if (!is_dir($restoreDir))
                 @mkdir($restoreDir, 0777, true);
-            }
 
             if ($method === 'GET') {
                 if ($subAction === 'logs') {
@@ -2066,7 +2073,7 @@ function handle_system($method, $action, $subAction = null)
                         json_success(['logs' => "Nessun log trovato.\n"]);
                     }
                 }
-                
+
                 // Status check
                 $status = ['has_file' => false];
                 if (file_exists($tempFile)) {
@@ -2079,8 +2086,41 @@ function handle_system($method, $action, $subAction = null)
             }
 
             if ($method === 'POST') {
-                if ($subAction === 'upload') {
-                    if (empty($_FILES)) json_error('Nessun file caricato', 400);
+                if ($subAction === 'upload-chunk') {
+                    $chunkIndex = isset($_POST['chunkIndex']) ? (int) $_POST['chunkIndex'] : 0;
+                    $totalChunks = isset($_POST['totalChunks']) ? (int) $_POST['totalChunks'] : 1;
+
+                    if (empty($_FILES))
+                        json_error('Nessun pezzetto caricato', 400);
+                    if ($_FILES["file"]["error"]) {
+                        json_error('Errore nell\'upload del pezzo: ' . $_FILES["file"]["error"], 400);
+                    }
+
+                    $chunkData = file_get_contents($_FILES["file"]["tmp_name"]);
+                    if ($chunkIndex === 0) {
+                        // Primo pezzo: sovrascrivi per sicurezza
+                        file_put_contents($tempFile, $chunkData);
+                    } else {
+                        // Pezzi successivi: append
+                        file_put_contents($tempFile, $chunkData, FILE_APPEND);
+                    }
+
+                    if ($chunkIndex === $totalChunks - 1) {
+                        $analysis = validate_restore_archive($tempFile);
+                        json_success([
+                            'message' => 'Caricamento completato con successo',
+                            'analysis' => $analysis,
+                            'completed' => true
+                        ]);
+                    } else {
+                        json_success([
+                            'message' => "Ricevuto pezzo " . ($chunkIndex + 1) . " di $totalChunks",
+                            'completed' => false
+                        ]);
+                    }
+                } elseif ($subAction === 'upload') {
+                    if (empty($_FILES))
+                        json_error('Nessun file caricato', 400);
                     if ($_FILES["file"]["error"]) {
                         json_error('Errore nell\'upload del file: ' . $_FILES["file"]["error"], 400);
                     }
@@ -2094,8 +2134,9 @@ function handle_system($method, $action, $subAction = null)
                         json_error('Errore nello spostamento del file caricato', 500);
                     }
                 } elseif ($subAction === 'start') {
-                    if (!file_exists($tempFile)) json_error('File di restore non trovato. Caricalo prima.', 404);
-                    
+                    if (!file_exists($tempFile))
+                        json_error('File di restore non trovato. Caricalo prima.', 404);
+
                     $analysis = validate_restore_archive($tempFile);
                     if (!$analysis['validation']['mandatory']) {
                         json_error('Il file non contiene tutti i componenti obbligatori richiesti.', 400);
@@ -2517,7 +2558,7 @@ function handle_ebird($method, $id)
         // Include date in batchId so it's easily extractable from filename
         $batchId = "{$date}_" . time() . "_" . bin2hex(random_bytes(4));
         $batchFile = "{$zipDir}/batch_{$batchId}.json";
-        
+
         // Native write as the system user using PHP (robust against large checklists and permissions)
         $batchJson = json_encode($files);
         $batchPhp = 'file_put_contents("' . $batchFile . '", base64_decode("' . base64_encode($batchJson) . '"), LOCK_EX); chmod("' . $batchFile . '", 0644);';
@@ -2598,7 +2639,7 @@ function handle_export($method, $id)
 
         $scriptPath = __ROOT__ . '/scripts/export_zip_async.php';
         shell_exec("nohup sudo -u $user php {$scriptPath} " . escapeshellarg($date) . " > /dev/null 2>&1 &");
-        
+
         json_success(['message' => 'Esportazione avviata in background.']);
     }
 
@@ -3056,7 +3097,7 @@ function handle_backup_file($method, $filename)
     if ($size) {
         header('Content-Length: ' . $size);
     }
-    
+
     // Chunked read to minimize memory usage and prevent timeouts
     $handle = @fopen($filePath, 'rb');
     if ($handle) {
