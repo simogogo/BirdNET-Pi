@@ -2391,30 +2391,37 @@ function handle_ebird($method, $id)
             json_error('No files to zip', 400);
 
         $config = get_config();
+        $home = get_home();
+        $user = get_user();
+
         if (isset($config['EXTRACTED']) && !empty($config['EXTRACTED'])) {
             $extractedDir = rtrim($config['EXTRACTED'], '/');
         } else {
-            $home = get_home() ?: __ROOT__;
             $extractedDir = "$home/BirdSongs/Extracted";
         }
         $zipDir = $extractedDir . "/exportsZip";
 
-        if (!is_dir($zipDir))
-            @mkdir($zipDir, 0777, true);
+        if (!is_dir($zipDir)) {
+            shell_exec("sudo -u $user mkdir -p " . escapeshellarg($zipDir));
+            shell_exec("sudo -u $user chmod 777 " . escapeshellarg($zipDir));
+        }
 
         // Include date in batchId so it's easily extractable from filename
         $batchId = "{$date}_" . time() . "_" . bin2hex(random_bytes(4));
         $batchFile = "{$zipDir}/batch_{$batchId}.json";
-        file_put_contents($batchFile, json_encode($files));
+        
+        $batchContent = escapeshellarg(json_encode($files));
+        shell_exec("echo $batchContent | sudo -u $user tee " . escapeshellarg($batchFile) . " > /dev/null");
 
         $statusFile = "{$zipDir}/eBird_Export_{$batchId}.status";
-        file_put_contents($statusFile, json_encode([
+        $statusContent = escapeshellarg(json_encode([
             'status' => 'processing',
             'date' => $date,
             'type' => 'ebird',
             'batch_id' => $batchId,
             'timestamp' => time()
         ]));
+        shell_exec("echo $statusContent | sudo -u $user tee " . escapeshellarg($statusFile) . " > /dev/null");
 
         $scriptPath = __ROOT__ . '/scripts/export_zip_async.php';
         shell_exec("nohup php {$scriptPath} " . escapeshellarg($date) . " " . escapeshellarg($batchId) . " > /dev/null 2>&1 &");
@@ -2438,15 +2445,20 @@ function handle_export($method, $id)
             json_error('Data mancante o nel formato errato (YYYY-MM-DD)', 400);
         }
         $config = get_config();
+        $home = get_home();
+        $user = get_user();
+
         if (isset($config['EXTRACTED']) && !empty($config['EXTRACTED'])) {
             $extractedDir = rtrim($config['EXTRACTED'], '/');
         } else {
-            $home = get_home() ?: __ROOT__;
             $extractedDir = "$home/BirdSongs/Extracted";
         }
         $zipDir = $extractedDir . "/exportsZip";
-        if (!is_dir($zipDir))
-            @mkdir($zipDir, 0777, true);
+
+        if (!is_dir($zipDir)) {
+            shell_exec("sudo -u $user mkdir -p " . escapeshellarg($zipDir));
+            shell_exec("sudo -u $user chmod 777 " . escapeshellarg($zipDir));
+        }
 
         $audioDir = "{$extractedDir}/By_Date/{$date}";
         if (!is_dir($audioDir)) {
@@ -2455,13 +2467,14 @@ function handle_export($method, $id)
 
         $statusFile = "{$zipDir}/export_{$date}.status";
         if (file_exists($statusFile)) {
-            $currentStatus = json_decode(file_get_contents($statusFile), true);
-            if ($currentStatus && $currentStatus['status'] === 'processing') {
+            $currentStatus = json_decode(@file_get_contents($statusFile), true);
+            if ($currentStatus && ($currentStatus['status'] ?? '') === 'processing') {
                 json_success(['message' => 'Un\'esportazione per questa data è già in corso.']);
             }
         }
 
-        file_put_contents($statusFile, json_encode(['status' => 'processing', 'date' => $date, 'timestamp' => time()]));
+        $statusContent = escapeshellarg(json_encode(['status' => 'processing', 'date' => $date, 'timestamp' => time()]));
+        shell_exec("echo $statusContent | sudo -u $user tee " . escapeshellarg($statusFile) . " > /dev/null");
 
         $scriptPath = __ROOT__ . '/scripts/export_zip_async.php';
         shell_exec("nohup php {$scriptPath} " . escapeshellarg($date) . " > /dev/null 2>&1 &");
@@ -2600,21 +2613,28 @@ function handle_export($method, $id)
         }
 
         $config = get_config();
-        $extractedDir = rtrim($config['EXTRACTED'] ?? (__ROOT__ . "/Extracted"), '/');
+        $home = get_home();
+        $user = get_user();
+
+        if (isset($config['EXTRACTED']) && !empty($config['EXTRACTED'])) {
+            $extractedDir = rtrim($config['EXTRACTED'], '/');
+        } else {
+            $extractedDir = "$home/BirdSongs/Extracted";
+        }
         $zipDir = $extractedDir . "/exportsZip";
         $filePath = "{$zipDir}/{$filename}";
 
         if (file_exists($filePath)) {
-            @unlink($filePath);
+            shell_exec("sudo -u $user rm -f " . escapeshellarg($filePath));
         }
 
         // Delete corresponding status file
         $statusPath = str_replace('.zip', '.status', $filePath);
         if (file_exists($statusPath)) {
-            $statusData = json_decode(file_get_contents($statusPath), true);
+            $statusData = json_decode(@file_get_contents($statusPath), true);
             // Only delete if it's NOT still processing (safety)
             if (!$statusData || (isset($statusData['status']) && $statusData['status'] !== 'processing')) {
-                @unlink($statusPath);
+                shell_exec("sudo -u $user rm -f " . escapeshellarg($statusPath));
             }
         }
 
@@ -2623,7 +2643,7 @@ function handle_export($method, $id)
         if (isset($matches[1])) {
             $oldStatusPath = "{$zipDir}/export_{$matches[1]}.status";
             if (file_exists($oldStatusPath) && $oldStatusPath !== $statusPath) {
-                @unlink($oldStatusPath);
+                shell_exec("sudo -u $user rm -f " . escapeshellarg($oldStatusPath));
             }
         }
 
