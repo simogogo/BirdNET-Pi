@@ -4,10 +4,7 @@
 source /etc/birdnet/birdnet.conf
 my_dir=/home/$BIRDNET_USER/BirdNET-Pi/scripts
 
-if [ "$EUID" == 0 ] && [ "$ACTION" != "init" ]
-  then echo "Please run as a non-root user."
-  exit
-fi
+
 
 usage() { echo "Usage: $0 -a backup|restore|size|init -f <backup_file>" 1>&2; exit 1; }
 
@@ -30,6 +27,11 @@ while getopts "a:f:" o; do
 done
 
 [ -z "$ACTION" ] && usage && exit 1
+
+if [ "$EUID" == 0 ] && [ "$ACTION" != "init" ]
+  then echo "Please run as a non-root user."
+  exit
+fi
 if [ $ACTION != "size" ] && [ $ACTION != "init" ]; then
   [ -z "$ARCHIVE" ] && usage && exit 1
   [ "$ARCHIVE" == '-' ] && [ $ACTION == "backup" ] && QUIET=1
