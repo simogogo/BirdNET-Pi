@@ -1788,7 +1788,8 @@ function validate_restore_archive($path)
         "disk_check_exclude.txt",
         "exclude_species_list.txt",
         "confirmed_species_list.txt",
-        "include_species_list.txt"
+        "include_species_list.txt",
+        "LongSpectrograms"
     ];
 
     // Get top-level entries in the tar
