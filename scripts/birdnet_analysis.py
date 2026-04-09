@@ -113,6 +113,7 @@ def process_file(file_name, report_queue):
 
 def handle_reporting_queue(queue):
     process_count = 0
+    last_day = None
     while True:
         msg = queue.get()
         # check for signal that we are done
@@ -131,17 +132,27 @@ def handle_reporting_queue(queue):
             bird_weather(file, detections)
             heartbeat()
             
+            conf = get_settings()
+            current_day = file.file_date.strftime('%Y-%m-%d')
+            
             # --- LDFCS Generation ---
             if spectrogram_generator is not None:
                 try:
-                    conf = get_settings()
+                    # Finalize previous day if day changed
+                    if last_day is not None and current_day != last_day:
+                        log.info(f"LDFCS: Day change detected from {last_day} to {current_day}. Finalizing spectrogram for {last_day}.")
+                        spectrogram_generator.render_daily_image(conf, last_day)
+                        spectrogram_generator.cleanup_ldfcs_memmaps(conf)
+                    
+                    last_day = current_day
+                    
                     spectrogram_generator.update_daily_spectrogram(file.file_name, conf)
                     process_count += 1
                     
                     # Call render roughly every 10 minutes 
                     # (Assuming recording_length is between 15s and 60s, checking every 40 processations is safe)
                     if process_count % 40 == 0:
-                        spectrogram_generator.render_daily_image(conf)
+                        spectrogram_generator.render_daily_image(conf, current_day)
                     
                     if process_count % 100 == 0:
                         spectrogram_generator.cleanup_ldfcs_memmaps(conf)

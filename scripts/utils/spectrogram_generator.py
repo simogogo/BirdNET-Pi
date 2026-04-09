@@ -226,7 +226,7 @@ def update_daily_spectrogram(audio_path, conf):
     except Exception as e:
         log.exception(f"LDFCS Error: {e}")
 
-def render_daily_image(conf):
+def render_daily_image(conf, date_str=None):
     try:
         generate_standard = int(conf.get('GENERATE_LDFCS_STANDARD', '1'))
         generate_indices = int(conf.get('GENERATE_LDFCS_INDICES', '1'))
@@ -234,8 +234,8 @@ def render_daily_image(conf):
         if generate_standard == 0 and generate_indices == 0:
             return
             
-        # We render today's date
-        date_str = datetime.datetime.now().strftime('%Y-%m-%d')
+        if date_str is None:
+            date_str = datetime.datetime.now().strftime('%Y-%m-%d')
         recording_length = float(conf.get('RECORDING_LENGTH', 15))
         total_cols = _get_total_cols(recording_length)
         
