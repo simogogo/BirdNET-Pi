@@ -2078,9 +2078,14 @@ function handle_system($method, $action, $subAction = null)
                 // Status check
                 $status = ['has_file' => false];
                 if (file_exists($tempFile)) {
+                    $status['has_file'] = true;
+                    $status['file_size'] = @filesize($tempFile);
                     $analysis = validate_restore_archive($tempFile);
                     if ($analysis) {
-                        $status = array_merge(['has_file' => true], $analysis);
+                        $status = array_merge($status, $analysis);
+                    } else {
+                        $status['error'] = 'L\'archivio caricato non sembra essere un file .tar valido o è corrotto.';
+                        $status['mandatory'] = false;
                     }
                 }
                 json_success($status);
@@ -2090,6 +2095,7 @@ function handle_system($method, $action, $subAction = null)
                 if ($subAction === 'upload-chunk') {
                     $chunkIndex = isset($_POST['chunkIndex']) ? (int) $_POST['chunkIndex'] : 0;
                     $totalChunks = isset($_POST['totalChunks']) ? (int) $_POST['totalChunks'] : 1;
+                    $origFilename = isset($_POST['filename']) ? $_POST['filename'] : 'unknown';
 
                     if (empty($_FILES)) {
                         $max_upload = ini_get('upload_max_filesize');
@@ -2100,14 +2106,29 @@ function handle_system($method, $action, $subAction = null)
                         json_error('Errore nell\'upload del pezzo: ' . $_FILES["file"]["error"], 400);
                     }
 
+                    if (!is_writable($restoreDir)) {
+                        json_error("La cartella di ripristino non è scrivibile: $restoreDir", 500);
+                    }
+
                     $chunkData = file_get_contents($_FILES["file"]["tmp_name"]);
+                    if ($chunkData === false) {
+                        json_error("Errore nella lettura del file temporaneo caricato.", 500);
+                    }
+
                     if ($chunkIndex === 0) {
-                        // Primo pezzo: sovrascrivi per sicurezza
-                        file_put_contents($tempFile, $chunkData);
+                        // Primo pezzo: sovrascrivi
+                        $success = file_put_contents($tempFile, $chunkData);
                     } else {
                         // Pezzi successivi: append
-                        file_put_contents($tempFile, $chunkData, FILE_APPEND);
+                        $success = file_put_contents($tempFile, $chunkData, FILE_APPEND);
                     }
+
+                    if ($success === false) {
+                        json_error("Errore nella scrittura del pezzo $chunkIndex su $tempFile", 500);
+                    }
+
+                    // Logging per debug
+                    syslog(LOG_INFO, "BirdNET-Pi Restore: Ricevuto chunk $chunkIndex di $totalChunks per $origFilename. Salvato in $tempFile");
 
                     if ($chunkIndex === $totalChunks - 1) {
                         $analysis = validate_restore_archive($tempFile);
