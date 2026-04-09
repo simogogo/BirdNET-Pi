@@ -2060,9 +2060,6 @@ function handle_system($method, $action, $subAction = null)
 
             set_time_limit(600); // 10 minutes for slow uploads
             ini_set('memory_limit', '512M');
-            if (!is_dir($restoreDir))
-                @mkdir($restoreDir, 0777, true);
-
             if ($method === 'GET') {
                 if ($subAction === 'logs') {
                     $logFile = "{$home}/BirdSongs/restore.log";
@@ -2092,6 +2089,11 @@ function handle_system($method, $action, $subAction = null)
             }
 
             if ($method === 'POST') {
+                // Ensure Restore directory exists and is writeable by web server
+                // We use the new 'init' action in backup_data.sh which runs as the correct user
+                $user = get_user();
+                @shell_exec("sudo -u $user $home/BirdNET-Pi/scripts/backup_data.sh -a init > /dev/null 2>&1");
+
                 if ($subAction === 'upload-chunk') {
                     $chunkIndex = isset($_POST['chunkIndex']) ? (int) $_POST['chunkIndex'] : 0;
                     $totalChunks = isset($_POST['totalChunks']) ? (int) $_POST['totalChunks'] : 1;

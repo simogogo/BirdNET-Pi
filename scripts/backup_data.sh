@@ -9,7 +9,7 @@ if [ "$EUID" == 0 ]
   exit
 fi
 
-usage() { echo "Usage: $0 -a backup|restore|size -f <backup_file>" 1>&2; exit 1; }
+usage() { echo "Usage: $0 -a backup|restore|size|init -f <backup_file>" 1>&2; exit 1; }
 
 unset -v ACTION
 unset -v ARCHIVE
@@ -18,7 +18,7 @@ while getopts "a:f:" o; do
   case "${o}" in
     a)
       ACTION=${OPTARG}
-      [ $ACTION == "backup" ] || [ $ACTION == "restore" ] || [ $ACTION == "size" ] || usage
+      [ $ACTION == "backup" ] || [ $ACTION == "restore" ] || [ $ACTION == "size" ] || [ $ACTION == "init" ] || usage
       ;;
     f)
       ARCHIVE=${OPTARG}
@@ -30,7 +30,7 @@ while getopts "a:f:" o; do
 done
 
 [ -z "$ACTION" ] && usage && exit 1
-if [ $ACTION != "size" ]; then
+if [ $ACTION != "size" ] && [ $ACTION != "init" ]; then
   [ -z "$ARCHIVE" ] && usage && exit 1
   [ "$ARCHIVE" == '-' ] && [ $ACTION == "backup" ] && QUIET=1
 fi
@@ -152,6 +152,14 @@ restore() {
   log "Restore done"
 }
 
+init_restore() {
+  RESTORE_DIR="/home/$BIRDNET_USER/BirdSongs/Restore"
+  log "Preparing restore directory: $RESTORE_DIR"
+  mkdir -p "$RESTORE_DIR"
+  chmod 777 "$RESTORE_DIR"
+  log "Done"
+}
+
 function cleanup()
 {
   rm -fr ${UNPACK}
@@ -177,9 +185,11 @@ optional=("/home/$BIRDNET_USER/BirdNET-Pi/apprise.txt"
 
 [ $ACTION == "backup" ] && backup_check
 [ $ACTION == "restore" ] && restore_check
-if [ $ACTION == "size" ]; then
-  estimated_backup_size
   echo $ESTIMATED
+  exit
+fi
+if [ $ACTION == "init" ]; then
+  init_restore
   exit
 fi
 
