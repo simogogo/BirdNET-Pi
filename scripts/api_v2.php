@@ -2093,7 +2093,7 @@ function handle_system($method, $action, $subAction = null)
                     // Ensure Restore directory exists and is writeable by web server
                     // We use the new 'init' action in backup_data.sh which runs as the correct user
                     $user = get_user();
-                    $initOutput = shell_exec("sudo -u $user $home/BirdNET-Pi/scripts/backup_data.sh -a init 2>&1");
+                    $initOutput = shell_exec("sudo $home/BirdNET-Pi/scripts/backup_data.sh -a init 2>&1");
                     clearstatcache(true, $restoreDir);
 
                     if (!is_writable($restoreDir)) {

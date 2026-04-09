@@ -4,7 +4,7 @@
 source /etc/birdnet/birdnet.conf
 my_dir=/home/$BIRDNET_USER/BirdNET-Pi/scripts
 
-if [ "$EUID" == 0 ]
+if [ "$EUID" == 0 ] && [ "$ACTION" != "init" ]
   then echo "Please run as a non-root user."
   exit
 fi
@@ -157,6 +157,9 @@ init_restore() {
   log "Preparing restore directory: $RESTORE_DIR"
   mkdir -p "$RESTORE_DIR"
   chmod 777 "$RESTORE_DIR"
+  if [ "$EUID" == 0 ]; then
+    chown $BIRDNET_USER:$BIRDNET_USER "$RESTORE_DIR"
+  fi
   log "Done"
 }
 
