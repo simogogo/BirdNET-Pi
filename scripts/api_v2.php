@@ -2088,6 +2088,7 @@ function handle_system($method, $action, $subAction = null)
                 json_success($status);
             }
 
+            if ($method === 'POST') {
                 if ($subAction === 'upload-chunk' || $subAction === 'upload') {
                     // Ensure Restore directory exists and is writeable by web server
                     // We use the new 'init' action in backup_data.sh which runs as the correct user
