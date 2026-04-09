@@ -29,7 +29,7 @@ done
 [ -z "$ACTION" ] && usage && exit 1
 
 if [ "$EUID" == 0 ] && [ "$ACTION" != "init" ]
-  then echo "Please run as a non-root user."
+  then echo "Please run as a non-root user. Current Action: [$ACTION]"
   exit
 fi
 if [ $ACTION != "size" ] && [ $ACTION != "init" ]; then
@@ -190,6 +190,8 @@ optional=("/home/$BIRDNET_USER/BirdNET-Pi/apprise.txt"
 
 [ $ACTION == "backup" ] && backup_check
 [ $ACTION == "restore" ] && restore_check
+if [ $ACTION == "size" ]; then
+  estimated_backup_size
   echo $ESTIMATED
   exit
 fi
