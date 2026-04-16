@@ -250,7 +250,7 @@ function handle_detections($method, $id)
     $date = $_GET['date'] ?? date('Y-m-d');
     $species = $_GET['species'] ?? null;
     $min_confidence = floatval($_GET['min_confidence'] ?? 0);
-    $limit = intval($_GET['limit'] ?? 500);
+    $limit = intval($_GET['limit'] ?? 1500);
     $offset = intval($_GET['offset'] ?? 0);
 
     // Unified logic for standard and 'recent' detections
