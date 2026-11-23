@@ -296,6 +296,20 @@ CREATE TABLE IF NOT EXISTS weather (
 EOF
 
 
+# Ensure onnxruntime (for Geomodel V3.0) and BirdNET+ V3.0 assets are available
+if [ -x "$HOME/BirdNET-Pi/birdnet/bin/python3" ]; then
+  if ! sudo_with_user "$HOME/BirdNET-Pi/birdnet/bin/python3" -c "import onnxruntime" &>/dev/null; then
+    sudo_with_user "$HOME/BirdNET-Pi/birdnet/bin/pip" install --no-cache-dir onnxruntime || true
+  fi
+fi
+if [ -x "$HOME/BirdNET-Pi/scripts/download_v3_models.sh" ]; then
+  if [[ "${MODEL:-}" == BirdNET+_V3.0_* ]]; then
+    sudo_with_user "$HOME/BirdNET-Pi/scripts/download_v3_models.sh" --model "${MODEL}" || true
+  else
+    sudo_with_user "$HOME/BirdNET-Pi/scripts/download_v3_models.sh" --pruned || true
+  fi
+fi
+
 # update snippets above
 echo "Updating PHP configuration limits"
 sed -i "s/^upload_max_filesize = .*/upload_max_filesize = 100M/" /etc/php/*/fpm/php.ini

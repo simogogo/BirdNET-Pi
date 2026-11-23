@@ -130,6 +130,9 @@ try {
         case 'database-lang':
             handle_database_lang();
             break;
+        case 'labels':
+            handle_labels();
+            break;
         case 'services':
             handle_services($method, $id);
             break;
@@ -1394,7 +1397,43 @@ function handle_recording_length($method)
 function handle_database_lang()
 {
     $config = get_config();
-    json_success(['DATABASE_LANG' => $config['DATABASE_LANG'] ?? 'en']);
+    json_success([
+        'DATABASE_LANG' => $config['DATABASE_LANG'] ?? 'en',
+        'MODEL' => $config['MODEL'] ?? '',
+    ]);
+}
+
+//  ACTIVE MODEL LABELS (No Auth)
+function handle_labels()
+{
+    $config = get_config();
+    $labelsPath = __ROOT__ . '/model/labels.txt';
+
+    if (!file_exists($labelsPath) || filesize($labelsPath) === 0) {
+        $user = get_user();
+        $home = get_home();
+        shell_exec("sudo -u $user $home/BirdNET-Pi/scripts/install_language_label.sh > /dev/null 2>&1");
+    }
+
+    $labels = [];
+    if (file_exists($labelsPath) && is_readable($labelsPath)) {
+        $lines = file($labelsPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        if ($lines !== false) {
+            foreach ($lines as $line) {
+                $trimmed = trim($line);
+                if ($trimmed !== '') {
+                    $labels[] = $trimmed;
+                }
+            }
+        }
+    }
+
+    json_success([
+        'model' => $config['MODEL'] ?? '',
+        'language' => $config['DATABASE_LANG'] ?? 'en',
+        'count' => count($labels),
+        'labels' => $labels,
+    ]);
 }
 
 //  CONFIG 
@@ -1450,6 +1489,9 @@ function handle_config($method, $id = null)
             'APPRISE_MINIMUM_SECONDS_BETWEEN_NOTIFICATIONS_PER_SPECIES' => '0',
             'SF_THRESH' => '0.03',
             'DATA_MODEL_VERSION' => '1',
+            'V3_EXTRA_CLASSES' => '',
+            'V3_CHUNK_DURATION' => '3',
+            'V3_THREADS' => '2',
             'APPRISE_ONLY_NOTIFY_SPECIES_NAMES' => '',
             'APPRISE_ONLY_NOTIFY_SPECIES_NAMES_2' => '',
 
@@ -1536,6 +1578,9 @@ function handle_config($method, $id = null)
             'APPRISE_MINIMUM_SECONDS_BETWEEN_NOTIFICATIONS_PER_SPECIES',
             'SF_THRESH',
             'DATA_MODEL_VERSION',
+            'V3_EXTRA_CLASSES',
+            'V3_CHUNK_DURATION',
+            'V3_THREADS',
             'APPRISE_ONLY_NOTIFY_SPECIES_NAMES',
             'APPRISE_ONLY_NOTIFY_SPECIES_NAMES_2',
 
@@ -1589,7 +1634,12 @@ function handle_config($method, $id = null)
                 continue;
 
             // Normalizzazione separatore decimale per campi numerici e prevenzione notazione scientifica
-            if (in_array($key, ['SF_THRESH', 'LATITUDE', 'LONGITUDE', 'RARE_SPECIES_THRESHOLD', 'PURGE_THRESHOLD'])) {
+            if ($key === 'PURGE_THRESHOLD') {
+                $valNum = (int) round((float) str_replace(',', '.', (string) $value));
+                if ($valNum < 20) $valNum = 20;
+                if ($valNum > 99) $valNum = 99;
+                $value = (string) $valNum;
+            } elseif (in_array($key, ['SF_THRESH', 'LATITUDE', 'LONGITUDE', 'RARE_SPECIES_THRESHOLD'])) {
                 $value = str_replace(',', '.', (string) $value);
                 if (is_numeric($value)) {
                     // Forziamo un formato decimale standard per evitare scientific notation in birdnet.conf
@@ -1635,7 +1685,8 @@ function handle_config($method, $id = null)
                 'CUSTOM_IMAGE_TITLE',
                 'BIRDNETPI_URL',
                 'APPRISE',
-                'RTSP_STREAM'
+                'RTSP_STREAM',
+                'V3_EXTRA_CLASSES'
             ]) || (strpos((string) $value, ' ') !== false);
 
             // Salvataggio nel file di configurazione con regex robusta (case-insensitive per il key)
@@ -1665,7 +1716,8 @@ function handle_config($method, $id = null)
             $home = get_home();
 
             if ($update_language) {
-                shell_exec("sudo -u $user $home/BirdNET-Pi/scripts/install_language_label.sh > /dev/null 2>&1 &");
+                // Run synchronously so model/labels.txt is updated before clients fetch /api/v2/labels
+                shell_exec("sudo -u $user $home/BirdNET-Pi/scripts/install_language_label.sh > /dev/null 2>&1");
             }
             if ($restart_chart_viewer) {
                 shell_exec("sudo systemctl restart chart_viewer.service > /dev/null 2>&1 &");

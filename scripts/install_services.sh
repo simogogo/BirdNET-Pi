@@ -46,6 +46,7 @@ Description=BirdNET Analysis
 Restart=always
 Type=simple
 RestartSec=2
+Nice=10
 User=${USER}
 ExecStart=$PYTHON_VIRTUAL_ENV /usr/local/bin/birdnet_analysis.py
 [Install]

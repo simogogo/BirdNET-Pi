@@ -55,3 +55,11 @@ model/labels_nm.zip
 model/labels_l18n.zip
 .htaccess
 /tests
+
+# BirdNET+ V3.0 models & taxonomy (downloaded automatically by scripts/download_v3_models.sh)
+model/BirdNET+_V3.0_Global_12K_FP16.tflite
+model/BirdNET+_V3.0_Global_12K_FP16_pruned.tflite
+model/BirdNET+_V3.0_Global_12K_Labels.csv
+model/BirdNET+_Geomodel_V3.0.4_Global_14K_FP16.onnx
+model/BirdNET+_Geomodel_V3.0.4_Global_14K_Labels.txt
+model/*.tmp.*

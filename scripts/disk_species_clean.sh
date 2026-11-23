@@ -1,21 +1,47 @@
-#!/bin/bash
-
+#!/usr/bin/env bash
 # KEEP ONLY THE NUMBER OF FILES PER SPECIES DEFINED IN THE OPTIONS
+set -u
 
+log() {
+  logger -t birdnet_disk_species_clean -- "$1" 2>/dev/null || true
+  echo "[disk_species_clean] $1"
+}
+
+if [ ! -f /etc/birdnet/birdnet.conf ]; then
+  log "ERROR: /etc/birdnet/birdnet.conf not found"
+  exit 1
+fi
+# shellcheck disable=SC1091
 source /etc/birdnet/birdnet.conf
-base_dir="$HOME/BirdSongs/Extracted/By_Date"
-max_files_species="${MAX_FILES_SPECIES:-1000}"
-cd "$base_dir" || true
 
-# If max_files_species is not higher than 1, exit
-if [[ "$max_files_species" -lt 1 ]]; then
-    exit 0
+EXTRACTED="${EXTRACTED:-$HOME/BirdSongs/Extracted}"
+base_dir="${EXTRACTED}/By_Date"
+raw_max="${MAX_FILES_SPECIES:-1000}"
+raw_max="${raw_max//,/.}"
+max_files_species="${raw_max%%.*}"
+
+# If max_files_species is not a valid integer >= 1, exit
+if ! [[ "$max_files_species" =~ ^[0-9]+$ ]] || [ "$max_files_species" -lt 1 ]; then
+  exit 0
 fi
 
-# Get unique species
+if ! cd "$base_dir" 2>/dev/null; then
+  log "ERROR: Cannot access $base_dir"
+  exit 1
+fi
+
+EXCLUDE_FILE="$HOME/BirdNET-Pi/scripts/disk_check_exclude.txt"
+TMP_EXCLUDE="$(mktemp)"
+trap 'rm -f "$TMP_EXCLUDE"' EXIT
+if [ -r "$EXCLUDE_FILE" ]; then
+  # Filter out blank lines and markers so grep -vFf never matches everything
+  grep -vE '^\s*$|^\s*##(start|end)\s*$' "$EXCLUDE_FILE" > "$TMP_EXCLUDE" 2>/dev/null || true
+fi
+
+# Get unique species from database
 bird_names=$(
-    sqlite3 -readonly "$HOME"/BirdNET-Pi/scripts/birds.db <<EOF
-.mode column
+  sqlite3 -readonly "$HOME/BirdNET-Pi/scripts/birds.db" <<EOF
+.mode list
 .headers off
 SELECT DISTINCT Com_Name FROM detections;
 .quit
@@ -23,55 +49,102 @@ EOF
 )
 
 # Sanitize the bird names (remove single quotes and replace spaces with underscores)
-sanitized_names="$(echo "$bird_names" | tr ' ' '_' | tr -d "'" | grep '[[:alnum:]]')"
-# Remove trailing underscores
-sanitized_names=$(echo "$sanitized_names" | sed 's/_*$//')
-# Define how date works
+sanitized_names="$(printf '%s\n' "$bird_names" | tr ' ' '_' | tr -d "'" | grep '[[:alnum:]]' | sed 's/_*$//' | sort -u)"
+
+# Define how date works (GNU vs BusyBox)
 dateformat=""
-if test "$(date -d "-7 days" '+%Y-%m-%d' 2>/dev/null)"; then
-    dateformat=" days"
+if date -d "-7 days" '+%Y-%m-%d' >/dev/null 2>&1; then
+  dateformat=" days"
 fi
 
-# find detail :
-# In the base folders (that corresponds to the BirdSongs/By_date)
-# Look for all folders that have the correct species names whatever the date
-# Look for files that have the correct format (containing a date), and that have an extension
-# For all That are not *.png (as the objective is to limit the number of audio files)
-# That were not taken in the past 7 days (= that don't contain the date from that past 7 days). $dateformat is configured as a different variables, as ubuntu accepts "5 days" while alpine accepts only "5"
-# That are not included in the file disk_check_exclude.txt that lists files protected from purge
-# If the specie name had a "-" in it, it must be converted to "=" to ensure that we have always the same number of "-" separated fields in the filename
-# Sort by confidence level (field 4 separated by -)
-# Sort by date (1 for year, 2 for month, 3 for days)
-# Remove the top x files, corresponding to the files best matching the criteria of confidence + age ; this corresponds to the number of file to keep (in addition to protected files
-# Rename species that had a = in their name to - (we don't need anymore - separated fields)
-# Duplicate all lines to append .png at the end, to remove the linked png
-# This appends a fake "temp" file, so that the sudo rm has at least one file to delete and does not hang
-# Delete files, then once all files are deleted echo the number of remaining files
+# Precompute last 8 dates (today and past 7 days)
+d0="$(date '+%Y-%m-%d')"
+d1="$(date -d "-1$dateformat" '+%Y-%m-%d')"
+d2="$(date -d "-2$dateformat" '+%Y-%m-%d')"
+d3="$(date -d "-3$dateformat" '+%Y-%m-%d')"
+d4="$(date -d "-4$dateformat" '+%Y-%m-%d')"
+d5="$(date -d "-5$dateformat" '+%Y-%m-%d')"
+d6="$(date -d "-6$dateformat" '+%Y-%m-%d')"
+d7="$(date -d "-7$dateformat" '+%Y-%m-%d')"
 
-# Read each line from the variable and echo the species
-while read -r species; do
-    echo -n "$species : "
-    species_san="${species/-/=}"
-    # Dummy file to execute the rm using xargs even if no files are there. Best solution found for code speed
-    touch temp
-    find */"$species" -type f -name "*[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*.*" \
-        -not -name "*.png" \
-        -not -name "*$(date -d "-7$dateformat" '+%Y-%m-%d')*" \
-        -not -name "*$(date -d "-6$dateformat" '+%Y-%m-%d')*" \
-        -not -name "*$(date -d "-5$dateformat" '+%Y-%m-%d')*" \
-        -not -name "*$(date -d "-4$dateformat" '+%Y-%m-%d')*" \
-        -not -name "*$(date -d "-3$dateformat" '+%Y-%m-%d')*" \
-        -not -name "*$(date -d "-2$dateformat" '+%Y-%m-%d')*" \
-        -not -name "*$(date -d "-1$dateformat" '+%Y-%m-%d')*" \
-        -not -name "*$(date '+%Y-%m-%d')*" |
-        grep -vFf "$HOME/BirdNET-Pi/scripts/disk_check_exclude.txt" |
-        sed "s|$species|$species_san|g" |
-        sort -t'-' -k4,4nr -k1,1nr -k2,2nr -k3,3nr |
-        tail -n +"$((max_files_species + 1))" |
-        sed "s|$species_san|$species|g" |
-        sed 'p; s/\(\.[^.]*\)$/\1.png/' |
-        awk 'BEGIN{print "temp"} {print}' |
-        xargs sudo rm && echo "success ($(find */"$species" -type f -name "*[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*.*" \
-        -not -name "*.png" | wc -l)) remaining" || echo "failed ($?)"
-# rm to be changed to touch or echo if you want to test without deletion
-done <<<"$sanitized_names"
+total_deleted=0
+
+while IFS= read -r species; do
+  [ -z "$species" ] && continue
+
+  # Replace ALL hyphens in species name with '=' so '-' field indexing works even with multi-hyphen names
+  species_san="${species//-/=}"
+
+  candidates="$(
+    find . -mindepth 3 -maxdepth 3 -path "./*/${species}/*" -type f \
+      -name "*[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*.*" \
+      ! -name "*.png" \
+      ! -name "*${d7}*" \
+      ! -name "*${d6}*" \
+      ! -name "*${d5}*" \
+      ! -name "*${d4}*" \
+      ! -name "*${d3}*" \
+      ! -name "*${d2}*" \
+      ! -name "*${d1}*" \
+      ! -name "*${d0}*" 2>/dev/null | sed 's|^\./||'
+  )"
+
+  [ -z "$candidates" ] && continue
+
+  if [ -s "$TMP_EXCLUDE" ]; then
+    candidates="$(printf '%s\n' "$candidates" | grep -vxFf "$TMP_EXCLUDE" || true)"
+  fi
+
+  [ -z "$candidates" ] && continue
+
+  to_delete="$(
+    printf '%s\n' "$candidates" |
+      awk -v s="$species" -v r="$species_san" '
+        {
+          if (s != r) {
+            out = ""
+            rest = $0
+            while ((i = index(rest, s)) > 0) {
+              out = out substr(rest, 1, i - 1) r
+              rest = substr(rest, i + length(s))
+            }
+            $0 = out rest
+          }
+          print
+        }' |
+      sort -t'-' -k4,4nr -k1,1nr -k2,2nr -k3,3nr |
+      tail -n +"$((max_files_species + 1))" |
+      awk -v s="$species_san" -v r="$species" '
+        {
+          if (s != r) {
+            out = ""
+            rest = $0
+            while ((i = index(rest, s)) > 0) {
+              out = out substr(rest, 1, i - 1) r
+              rest = substr(rest, i + length(s))
+            }
+            $0 = out rest
+          }
+          print
+        }'
+  )"
+
+  [ -z "$to_delete" ] && continue
+
+  sp_deleted=0
+  while IFS= read -r rel; do
+    [ -z "$rel" ] && continue
+    rm -f -- "$rel" "${rel}.png"
+    ((sp_deleted++))
+    ((total_deleted++))
+  done <<< "$to_delete"
+
+  if [ "$sp_deleted" -gt 0 ]; then
+    echo "$species : deleted $sp_deleted"
+  fi
+done <<< "$sanitized_names"
+
+# Clean empty directories created by removals
+find "$base_dir" -mindepth 1 -type d -empty -delete 2>/dev/null || true
+
+log "Completed species cleanup (max_files_species=${max_files_species}, deleted=${total_deleted})"

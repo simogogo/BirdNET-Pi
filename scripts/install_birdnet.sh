@@ -57,6 +57,7 @@ cd $my_dir/scripts || exit 1
 CURRENT_TIMEZONE=$(timedatectl show --value --property=Timezone)
 [ -f /etc/timezone ] && echo "$CURRENT_TIMEZONE" | sudo tee /etc/timezone > /dev/null
 
+./download_v3_models.sh --pruned || echo "Warning: could not download BirdNET+ V3.0 models during install (can be downloaded later via scripts/download_v3_models.sh)."
 ./install_language_label.sh || exit 1
 
 exit 0

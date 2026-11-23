@@ -47,7 +47,7 @@ elif [[ "$2" != *"_"* ]]; then
 fi
 
 # Check if $NEWNAME is found in the file $LABELS_FILE
-if ! grep -q "$NEWNAME" "$LABELS_FILE"; then
+if ! grep -Fxq -- "$NEWNAME" "$LABELS_FILE"; then
     echo "Error: $NEWNAME not found in $LABELS_FILE"
     exit 1
 fi
@@ -66,11 +66,17 @@ fi
 # Intro
 [[ "$OUTPUT_TYPE" == "debug" ]] && echo "Starting to modify $OLDNAME to $NEWNAME"
 
+# Escape single quotes for SQLite
+OLDNAME_sql="${OLDNAME//\'/\'\'}"
+OLD_SCI_NAME_sql="${OLD_SCI_NAME//\'/\'\'}"
+DATE_sql="${DATE//\'/\'\'}"
+TIME_sql="${TIME//\'/\'\'}"
+
 # Get the line where the column "File_Name" matches exactly $OLDNAME
-SQL_QUERY="SELECT Sci_Name, Com_Name, Date FROM $DETECTIONS_TABLE WHERE File_Name = '$OLDNAME'"
-if [ -n "$OLD_SCI_NAME" ]; then SQL_QUERY="$SQL_QUERY AND Sci_Name = '$OLD_SCI_NAME'"; fi
-if [ -n "$DATE" ]; then SQL_QUERY="$SQL_QUERY AND Date = '$DATE'"; fi
-if [ -n "$TIME" ]; then SQL_QUERY="$SQL_QUERY AND Time = '$TIME'"; fi
+SQL_QUERY="SELECT Sci_Name, Com_Name, Date FROM $DETECTIONS_TABLE WHERE File_Name = '$OLDNAME_sql'"
+if [ -n "$OLD_SCI_NAME" ]; then SQL_QUERY="$SQL_QUERY AND Sci_Name = '$OLD_SCI_NAME_sql'"; fi
+if [ -n "$DATE" ]; then SQL_QUERY="$SQL_QUERY AND Date = '$DATE_sql'"; fi
+if [ -n "$TIME" ]; then SQL_QUERY="$SQL_QUERY AND Time = '$TIME_sql'"; fi
 SQL_QUERY="$SQL_QUERY LIMIT 1;"
 
 IFS='|' read -r OLDNAME_sciname OLDNAME_comname OLDNAME_date < <(sqlite3 "$DB_FILE" "$SQL_QUERY")
@@ -127,11 +133,14 @@ fi
 # EXECUTE : UPDATE DATABASE FILES #
 ###################################
 
-# Update the database scoped row
-SQL_UPDATE="UPDATE $DETECTIONS_TABLE SET Sci_Name = '$NEWNAME_sciname', Com_Name = '$NEWNAME_comname', Confidence = '0', File_Name = '$NEWNAME_filename' WHERE File_Name = '$OLDNAME'"
-if [ -n "$OLD_SCI_NAME" ]; then SQL_UPDATE="$SQL_UPDATE AND Sci_Name = '$OLD_SCI_NAME'"; fi
-if [ -n "$DATE" ]; then SQL_UPDATE="$SQL_UPDATE AND Date = '$DATE'"; fi
-if [ -n "$TIME" ]; then SQL_UPDATE="$SQL_UPDATE AND Time = '$TIME'"; fi
+# Update the database scoped row (escape single quotes for SQLite)
+NEWNAME_sciname_sql="${NEWNAME_sciname//\'/\'\'}"
+NEWNAME_comname_sql="${NEWNAME_comname//\'/\'\'}"
+NEWNAME_filename_sql="${NEWNAME_filename//\'/\'\'}"
+SQL_UPDATE="UPDATE $DETECTIONS_TABLE SET Sci_Name = '$NEWNAME_sciname_sql', Com_Name = '$NEWNAME_comname_sql', Confidence = '0', File_Name = '$NEWNAME_filename_sql' WHERE File_Name = '$OLDNAME_sql'"
+if [ -n "$OLD_SCI_NAME" ]; then SQL_UPDATE="$SQL_UPDATE AND Sci_Name = '$OLD_SCI_NAME_sql'"; fi
+if [ -n "$DATE" ]; then SQL_UPDATE="$SQL_UPDATE AND Date = '$DATE_sql'"; fi
+if [ -n "$TIME" ]; then SQL_UPDATE="$SQL_UPDATE AND Time = '$TIME_sql'"; fi
 SQL_UPDATE="$SQL_UPDATE;"
 
 sqlite3 "$DB_FILE" "$SQL_UPDATE"

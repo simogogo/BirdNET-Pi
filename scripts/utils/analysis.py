@@ -6,7 +6,7 @@ import librosa
 import numpy as np
 
 from .classes import Detection, ParseFileName
-from .helpers import get_settings, get_language
+from .helpers import get_settings, get_language, is_v3_model, get_v3_taxon_groups, get_v3_enabled_extra_classes
 from .models import get_model
 
 log = logging.getLogger(__name__)
@@ -17,8 +17,8 @@ MODEL = None
 def loadCustomSpeciesList(path):
     species_list = []
     if os.path.isfile(path):
-        with open(path, 'r') as csfile:
-            species_list = [line.strip().split('_')[0] for line in csfile.readlines()]
+        with open(path, 'r', encoding='utf-8') as csfile:
+            species_list = [line.strip().split('_')[0] for line in csfile.readlines() if line.strip()]
 
     return species_list
 
@@ -47,8 +47,11 @@ def splitSignal(sig, rate, overlap, seconds=3.0, minlen=1.5):
 def readAudioData(path, overlap, sample_rate, chunk_duration):
     log.info('READING AUDIO DATA...')
 
-    # Open file with librosa (uses ffmpeg or libav)
-    sig, rate = librosa.load(path, sr=sample_rate, mono=True, res_type='kaiser_fast')
+    # Open file with librosa using fast medium-quality soxr resampling (with default fallback)
+    try:
+        sig, rate = librosa.load(path, sr=sample_rate, mono=True, res_type='soxr_mq')
+    except Exception:
+        sig, rate = librosa.load(path, sr=sample_rate, mono=True)
 
     # Split audio into chunks
     chunks = splitSignal(sig, rate, overlap, seconds=chunk_duration)
@@ -76,7 +79,7 @@ def analyzeAudioData(chunks, overlap, lat, lon, week):
 
     labeled = {}
     pred_start = 0.0
-    for p in filter_humans(detections):
+    for p in filter_humans(detections, total_classes=len(model.labels)):
         # Save timestamp and result
         pred_end = pred_start + model.chunk_duration
         labeled[str(pred_start) + ';' + str(pred_end)] = p
@@ -87,10 +90,16 @@ def analyzeAudioData(chunks, overlap, lat, lon, week):
     return labeled, predicted_species_list
 
 
-def filter_humans(predictions):
+def filter_humans(predictions, total_classes=None):
+    if not predictions:
+        return []
     conf = get_settings()
     priv_thresh = conf.getfloat('PRIVACY_THRESHOLD')
-    human_cutoff = max(10, int(6000 * priv_thresh / 100.0))
+    if total_classes is not None:
+        num_classes = total_classes
+    else:
+        num_classes = max(6000, max((len(p) for p in predictions), default=6000))
+    human_cutoff = max(10, int(num_classes * priv_thresh / 100.0))
     log.debug("HUMAN-CUTOFF AT: %d", human_cutoff)
     try:
         if conf.getint('EXTRACTION_LENGTH') > 9:
@@ -103,7 +112,7 @@ def filter_humans(predictions):
     human_mask = [False] * len(predictions)
     for i, prediction in enumerate(predictions):
         for p in prediction[:human_cutoff]:
-            if 'Human' in p[0]:
+            if 'Human' in p[0] or p[0] == 'Homo sapiens':
                 human_mask[i] = True
                 break
 
@@ -144,7 +153,11 @@ def run_analysis(file):
 
     conf = get_settings()
     model = load_global_model()
-    names = get_language(conf['DATABASE_LANG'])
+    v3_active = is_v3_model(conf['MODEL'])
+    names = get_language(conf['DATABASE_LANG'], model=conf['MODEL'])
+    taxon_groups = get_v3_taxon_groups() if v3_active else {}
+    enabled_extra_classes = get_v3_enabled_extra_classes(conf) if v3_active else set()
+    modeled_species = model.get_modeled_species() if v3_active else set()
 
     # Read audio data & handle errors
     try:
@@ -163,11 +176,19 @@ def run_analysis(file):
         for sci_name, confidence in entries:
             if confidence >= conf.getfloat('CONFIDENCE'):
                 com_name = names.get(sci_name, sci_name)
-                if sci_name not in include_list and len(include_list) != 0:
+                taxon = taxon_groups.get(sci_name, 'Aves') if v3_active else 'Aves'
+                if v3_active and taxon != 'Aves' and taxon not in enabled_extra_classes:
+                    log.debug("Excluded as taxon group '%s' is disabled: %s %s", taxon, sci_name, com_name)
+                elif sci_name not in include_list and len(include_list) != 0:
                     log.warning("Excluded as INCLUDE_LIST is active but this species is not in it: %s %s", sci_name, com_name)
                 elif sci_name in exclude_list and len(exclude_list) != 0:
                     log.warning("Excluded as species in EXCLUDE_LIST: %s %s", sci_name, com_name)
-                elif sci_name not in predicted_species_list and len(predicted_species_list) != 0 and sci_name not in whitelist_list:
+                elif (
+                    sci_name not in predicted_species_list
+                    and len(predicted_species_list) != 0
+                    and sci_name not in whitelist_list
+                    and not (v3_active and taxon != 'Aves' and modeled_species and sci_name not in modeled_species)
+                ):
                     log.warning("Excluded as below Species Occurrence Frequency Threshold: %s %s", sci_name, com_name)
                 else:
                     d = Detection(

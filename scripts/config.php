@@ -235,7 +235,8 @@ $config = get_config($force_reload=true);
 <script>
   document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('modelsel').addEventListener('change', function() {
-    if(this.value == "BirdNET_GLOBAL_6K_V2.4_Model_FP16"){ 
+    var v3 = this.value === "BirdNET+_V3.0_Global_12K_FP16" || this.value === "BirdNET+_V3.0_Global_12K_FP16_pruned";
+    if(this.value == "BirdNET_GLOBAL_6K_V2.4_Model_FP16" || v3){ 
       document.getElementById("soft").style.display="unset";
     } else {
       document.getElementById("soft").style.display="none";
@@ -267,7 +268,7 @@ function sendTestNotification(e) {
       <label for="model">Select a Model: </label>
       <select id="modelsel" name="model" class="testbtn">
       <?php
-      $models = array("BirdNET_GLOBAL_6K_V2.4_Model_FP16", "BirdNET_6K_GLOBAL_MODEL");
+      $models = array("BirdNET+_V3.0_Global_12K_FP16", "BirdNET+_V3.0_Global_12K_FP16_pruned", "BirdNET_GLOBAL_6K_V2.4_Model_FP16", "BirdNET_6K_GLOBAL_MODEL");
       foreach($models as $modelName){
           $isSelected = "";
           if($config['MODEL'] == $modelName){
