@@ -13,6 +13,8 @@ A realtime acoustic bird classification system for the Raspberry Pi 5, 4B, 400, 
 Icon made by <a href="https://www.freepik.com" title="Freepik">Freepik</a> from <a href="https://www.flaticon.com/" title="Flaticon">www.flaticon.com</a>
 </p>
 
+<h2>BirdNET+ V3.x models now available!!!</h2>
+
 ## About this fork:
 I've been building on [mcguirepr89's](https://github.com/mcguirepr89/BirdNET-Pi) most excellent work to further update and improve BirdNET-Pi. Maybe someone will find it useful.
 Nachtzuster (https://github.com/Nachtzuster/BirdNET-Pi) is currently doing a great job mantaining this project.
